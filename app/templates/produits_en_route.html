@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+
+{% block title %}Produits en route{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-5 text-center"><i class="fas fa-truck"></i> Produits en cours de route</h1>
+
+    <!-- Messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Bouton pour ouvrir la modale d'ajout -->
+    <div class="mb-4">
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ajouterModal">
+            <i class="fas fa-plus-circle me-2"></i>Ajouter un produit en route
+        </button>
+    </div>
+
+    <!-- Tableau des produits en route -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header text-white" style="background-color: #2C3E50;">
+            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i> Liste des produits en route</h5>
+        </div>
+        <div class="card-body" style="background-color: #F8F9FA;">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Date commande</th>
+                            <th>Produit</th>
+                            <th>Quantité</th>
+                            <th>Prix achat</th>
+                            <th>Statut</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in produits %}
+                        <tr>
+                            <td>{{ p.date_commande.strftime('%d/%m/%Y') if p.date_commande else '' }}</td>
+                            <td>{{ p.produit.nom }}</td>
+                            <td>{{ p.quantite }}</td>
+                            <td>{{ p.prix_achat or '' }}</td>
+                            <td>
+                                {% if p.statut == 'arrivé' %}
+                                    <span class="badge bg-success">Arrivé</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">En route</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <!-- Bouton pour ouvrir la modale de modification -->
+                                <button class="btn btn-sm btn-info" data-bs-toggle="modal" data-bs-target="#modifierModal{{ p.id }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% if p.statut != 'arrivé' %}
+                                <!-- Formulaire pour réceptionner -->
+                                <form action="{{ url_for('routes.receptionner_produit_en_route', id=p.id) }}" method="post" style="display:inline;">
+                                    <select name="destination" class="form-select form-select-sm d-inline w-auto" required>
+                                        <option value="" disabled selected>Transférer vers...</option>
+                                        <option value="depot">Dépôt</option>
+                                        <option value="magasin">Magasin</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-sm btn-success" title="Réceptionner">
+                                        <i class="fas fa-check"></i>
+                                    </button>
+                                </form>
+                                {% endif %}
+                            </td>
+                        </tr>
+
+                        <!-- Modale de modification pour ce produit -->
+                        <div class="modal fade" id="modifierModal{{ p.id }}" tabindex="-1" aria-labelledby="modifierModalLabel{{ p.id }}" aria-hidden="true">
+                          <div class="modal-dialog">
+                            <div class="modal-content">
+                              <form method="post" action="{{ url_for('routes.modifier_produit_en_route', id=p.id) }}">
+                                <div class="modal-header">
+                                  <h5 class="modal-title" id="modifierModalLabel{{ p.id }}">Modifier le produit en route</h5>
+                                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <div class="mb-3">
+                                        <label for="produit_id{{ p.id }}" class="form-label">Produit</label>
+                                        <select class="form-select" id="produit_id{{ p.id }}" name="produit_id" required>
+                                            {% for produit in produits_liste %}
+                                                <option value="{{ produit.id }}" {% if p.produit_id == produit.id %}selected{% endif %}>{{ produit.nom }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="quantite{{ p.id }}" class="form-label">Quantité</label>
+                                        <input type="number" class="form-control" id="quantite{{ p.id }}" name="quantite" min="1" required value="{{ p.quantite }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="prix_achat{{ p.id }}" class="form-label">Prix d'achat</label>
+                                        <input type="number" step="0.01" class="form-control" id="prix_achat{{ p.id }}" name="prix_achat" value="{{ p.prix_achat }}">
+                                    </div>
+                                    <div class="mb-3">
+                                        <label for="statut{{ p.id }}" class="form-label">Statut</label>
+                                        <select class="form-select" id="statut{{ p.id }}" name="statut">
+                                            <option value="en attente" {% if p.statut == 'en attente' %}selected{% endif %}>En attente</option>
+                                            <option value="arrivé" {% if p.statut == 'arrivé' %}selected{% endif %}>Arrivé</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="modal-footer">
+                                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                                  <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Enregistrer</button>
+                                </div>
+                              </form>
+                            </div>
+                          </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale d'ajout -->
+<div class="modal fade" id="ajouterModal" tabindex="-1" aria-labelledby="ajouterModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="{{ url_for('routes.ajouter_produit_en_route') }}">
+        <div class="modal-header">
+          <h5 class="modal-title" id="ajouterModalLabel">Ajouter un produit en route</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+            <div class="mb-3">
+                <label for="produit_id" class="form-label">Produit</label>
+                <select class="form-select select2" id="produit_id" name="produit_id" required style="width: 100%;">
+                    <option value="" disabled selected>Choisir un produit</option>
+                    {% for produit in produits %}
+                        <option value="{{ produit.id }}">{{ produit.nom }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="quantite" class="form-label">Quantité</label>
+                <input type="number" class="form-control" id="quantite" name="quantite" min="1" required>
+            </div>
+            <div class="mb-3">
+                <label for="prix_achat" class="form-label">Prix d'achat</label>
+                <input type="number" step="0.01" class="form-control" id="prix_achat" name="prix_achat">
+            </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+          <button type="submit" class="btn btn-success"><i class="fas fa-save"></i> Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modale pour la sélection des produits -->
+<div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="produitModalLabel">Sélectionner un produit</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Champ de recherche dans la modale -->
+                <div class="mb-3">
+                    <input type="text" id="searchProduitModal" class="form-control" placeholder="Rechercher un produit...">
+                </div>
+                <!-- Liste des produits dans la modale -->
+                <div id="produitListModal" class="list-group">
+                    {% for produit in produits_liste %}
+                    <a href="#" class="list-group-item list-group-item-action" data-id="{{ produit.id }}" data-nom="{{ produit.nom }}">
+                        {{ produit.nom }}
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Select2 CSS -->
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+<!-- jQuery (nécessaire pour Select2) -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<!-- Select2 JS -->
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+<script>
+$(document).ready(function() {
+    $('#produit_id').select2({
+        dropdownParent: $('#ajouterModal'),
+        width: '100%',
+        placeholder: "Choisir un produit"
+    });
+    {% for p in produits %}
+        $('#produit_id{{ p.id }}').select2({
+            dropdownParent: $('#modifierModal{{ p.id }}'),
+            width: '100%',
+            placeholder: "Choisir un produit"
+        });
+    {% endfor %}
+});
+</script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchProduitModal = document.getElementById('searchProduitModal');
+    const produitListModal = document.getElementById('produitListModal');
+    const produitIdInput = document.getElementById('produit_id');
+    const nomProduitInput = document.getElementById('nom_produit');
+
+    // Recherche dans la modale
+    searchProduitModal.addEventListener('input', function() {
+        const query = searchProduitModal.value.toLowerCase();
+        const produits = produitListModal.querySelectorAll('.list-group-item');
+        produits.forEach(produit => {
+            const produitText = produit.textContent.toLowerCase();
+            produit.style.display = produitText.includes(query) ? 'block' : 'none';
+        });
+    });
+
+    // Sélection d'un produit dans la modale
+    produitListModal.addEventListener('click', function(event) {
+        if (event.target.classList.contains('list-group-item')) {
+            const produit = event.target;
+            produitIdInput.value = produit.dataset.id;
+            nomProduitInput.value = produit.dataset.nom;
+            bootstrap.Modal.getInstance(document.getElementById('produitModal')).hide();
+        }
+    });
+});
+</script>
+{% endblock %}

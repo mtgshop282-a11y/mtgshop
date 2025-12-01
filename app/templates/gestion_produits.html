@@ -1,0 +1,280 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestion des Produits{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="text-center mb-4"><i class="fas fa-boxes me-2"></i> Gestion des Produits</h1>
+
+    <!-- Formulaire pour ajouter un produit -->
+    <div class="card shadow mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="fas fa-plus-circle me-2"></i> Ajouter un produit</h5>
+        </div>
+        <div class="card-body">
+            <!-- Afficher les messages flash -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <form action="{{ url_for('routes.ajouter_produit') }}" method="POST">
+                <div class="mb-3">
+                    <label for="nom" class="form-label">Nom du produit</label>
+                    <input type="text" class="form-control" id="nom" name="nom" required>
+                </div>
+                <div class="mb-3">
+                    <label for="description" class="form-label">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3"></textarea>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="prix_achat" class="form-label">Prix d'achat</label>
+                            <input type="number" step="0.01" class="form-control" id="prix_achat" name="prix_achat" required>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="prix" class="form-label">Prix de vente</label>
+                            <input type="number" step="0.01" class="form-control" id="prix" name="prix" required>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-save me-2"></i> Ajouter
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des produits -->
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title mb-0"><i class="fas fa-boxes me-2"></i> Liste des produits</h5>
+            <div class="row mt-3 g-3">
+                <!-- Champ de recherche -->
+                <div class="col-md-9">
+                    <div class="input-group">
+                        <input type="text" id="searchProduit" class="form-control" placeholder="Rechercher un produit...">
+                        <button class="btn btn-outline-secondary" type="button">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- Bouton d'impression -->
+                <div class="col-md-3">
+                    <button id="printButton" class="btn btn-outline-secondary w-100">
+                        <i class="fas fa-print me-2"></i> Imprimer
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped table-hover table-bordered">
+                <thead class="table-dark">
+                    <tr>
+                        <th class="text-center">Nom</th>
+                        <th class="text-center">Description</th>
+                        <th class="text-center">Prix</th>
+                        <th class="text-center">Prix d'achat</th>
+                        <th class="text-center">Quantité</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="produitTableBody">
+                    {% for produit in produits %}
+                    <tr>
+                        <td class="text-center">{{ produit.nom }}</td>
+                        <td class="text-center">{{ produit.description }}</td>
+                        <td class="text-center">{{ produit.prix }}</td>
+                        <td class="text-center">{{ produit.prix_achat }}</td>
+                        <td class="text-center">{{ produit.quantite }}</td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-2">
+                                <!-- Bouton pour modifier un produit -->
+                                <button type="button" class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalModifier{{ produit.id }}">
+                                    <i class="fas fa-edit me-1"></i>
+                                </button>
+                                <!-- Bouton pour supprimer un produit -->
+                                <button type="button" class="btn btn-danger btn-sm btn-supprimer" data-id="{{ produit.id }}" data-nom="{{ produit.nom }}">
+                                    <i class="fas fa-trash me-1"></i> 
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+
+                    <!-- Modal pour modifier un produit -->
+                    <div class="modal fade" id="modalModifier{{ produit.id }}" tabindex="-1" aria-labelledby="modalModifierLabel{{ produit.id }}" aria-hidden="true">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header bg-warning text-white">
+                                    <h5 class="modal-title" id="modalModifierLabel{{ produit.id }}">Modifier le produit</h5>
+                                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <form action="{{ url_for('routes.modifier_produit', id=produit.id) }}" method="POST">
+                                        <div class="mb-3">
+                                            <label for="nom{{ produit.id }}" class="form-label">Nom du produit</label>
+                                            <input type="text" class="form-control" id="nom{{ produit.id }}" name="nom" value="{{ produit.nom }}" required>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label for="description{{ produit.id }}" class="form-label">Description</label>
+                                            <textarea class="form-control" id="description{{ produit.id }}" name="description" rows="3">{{ produit.description }}</textarea>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="prix_achat{{ produit.id }}" class="form-label">Prix d'achat</label>
+                                                    <input type="number" step="0.01" class="form-control" id="prix_achat{{ produit.id }}" name="prix_achat" value="{{ produit.prix_achat }}" required>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="prix{{ produit.id }}" class="form-label">Prix de vente</label>
+                                                    <input type="number" step="0.01" class="form-control" id="prix{{ produit.id }}" name="prix" value="{{ produit.prix }}" required>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary w-100">
+                                            <i class="fas fa-save me-2"></i> Enregistrer
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de suppression -->
+<div class="modal fade" id="modalSupprimer" tabindex="-1" aria-labelledby="modalSupprimerLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalSupprimerLabel">Confirmer la suppression</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                Êtes-vous sûr de vouloir supprimer le produit <strong id="nomProduitSupprimer"></strong> ?
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <form id="formSupprimer" action="{{ url_for('routes.supprimer_produit') }}" method="POST" style="display:inline;">
+                    <input type="hidden" name="idDel" id="idDel">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-2"></i> Supprimer
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script pour gérer la suppression, la recherche et l'impression -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Gestion de la suppression
+        document.querySelectorAll('.btn-supprimer').forEach(function(button) {
+            button.addEventListener('click', function() {
+                const id = button.getAttribute('data-id');
+                const nom = button.getAttribute('data-nom');
+
+                // Afficher le nom du produit dans le modal
+                document.getElementById('nomProduitSupprimer').textContent = nom;
+
+                // Récupérer l'ID du produit à supprimer
+                document.getElementById('idDel').value = id;
+
+                // Afficher le modal de suppression
+                const modalSupprimer = new bootstrap.Modal(document.getElementById('modalSupprimer'));
+                modalSupprimer.show();
+            });
+        });
+
+        // Filtrage des produits par recherche
+        const searchProduit = document.getElementById('searchProduit');
+        const produitTableBody = document.getElementById('produitTableBody');
+
+        searchProduit.addEventListener('input', function() {
+            const searchTerm = searchProduit.value.toLowerCase();
+            const rows = produitTableBody.getElementsByTagName('tr');
+
+            for (let row of rows) {
+                const cells = row.getElementsByTagName('td');
+                let match = false;
+
+                for (let cell of cells) {
+                    if (cell.textContent.toLowerCase().includes(searchTerm)) {
+                        match = true;
+                        break;
+                    }
+                }
+
+                row.style.display = match ? '' : 'none';
+            }
+        });
+
+        // Imprimer la liste des produits
+        const printButton = document.getElementById('printButton');
+        printButton.addEventListener('click', function() {
+            const printContents = `
+                <div class="text-center mb-4">
+                    <h1 class="display-4">Nom de l'entreprise</h1>
+                    <h3 class="h3">Liste des produits</h3>
+                    <p class="text-muted">Date d'impression : ${new Date().toLocaleString()}</p>
+                </div>
+                <table class="table table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Nom</th>
+                            <th>Description</th>
+                            <th>Prix</th>
+                            <th>Prix d'achat</th>
+                            <th>Quantité</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Array.from(produitTableBody.querySelectorAll('tr'))
+                            .filter(row => row.style.display !== 'none')
+                            .map(row => `
+                                <tr>
+                                    <td>${row.cells[0].textContent}</td>
+                                    <td>${row.cells[1].textContent}</td>
+                                    <td>${row.cells[2].textContent}</td>
+                                    <td>${row.cells[3].textContent}</td>
+                                    <td>${row.cells[4].textContent}</td>
+                                </tr>
+                            `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Liste des produits</title>
+                        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+                    </head>
+                    <body>
+                        ${printContents}
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        });
+    });
+</script>
+{% endblock %}

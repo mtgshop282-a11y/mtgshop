@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Modifier les permissions de {{ user.firstname }} {{ user.lastname }}</h2>
+    <form method="POST">
+        <div class="mb-3">
+            <label>Permissions :</label>
+            {% for permission in all_permissions %}
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="permissions" value="{{ permission }}"
+                    {% if user.permissions and permission in user.permissions %}checked{% endif %}>
+                <label class="form-check-label">{{ permission }}</label>
+            </div>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary">Enregistrer</button>
+    </form>
+</div>
+{% endblock %}
