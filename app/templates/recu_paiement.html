@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reçu de Paiement #{{ paiement.id }}</title>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Courier New', monospace; 
+            font-size: 12px; 
+            line-height: 1.2; 
+            width: 80mm; 
+            margin: 0 auto; 
+            padding: 2mm; 
+            background: white; 
+            color: black; 
+        }
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        .text-bold { font-weight: bold; }
+        .receipt-header { margin-bottom: 5px; padding-bottom: 3px; }
+        .company-name { font-size: 16px; font-weight: bold; margin-bottom: 2px; text-transform: uppercase; }
+        .company-details { font-size: 9px; margin: 1px 0; }
+        .receipt-divider { text-align: center; margin: 5px 0; font-weight: bold; padding-bottom: 3px; }
+        .info-line { display: flex; justify-content: space-between; margin: 3px 0; }
+        .items-table { width: 100%; border-collapse: collapse; margin: 5px 0; }
+        .items-table th { border: 1px solid black; padding: 3px 2px; font-weight: bold; background-color: #f0f0f0; }
+        .items-table td { border: 1px solid black; padding: 2px 2px; }
+        .framed-section { border: 1px solid black; padding: 5px; margin: 8px 0; }
+        .total-line { display: flex; justify-content: space-between; font-weight: bold; font-size: 13px; }
+        .payment-line { display: flex; justify-content: space-between; margin: 2px 0; }
+        .payment-details { margin-top: 5px; padding-top: 3px; border-top: 1px dashed #000; }
+        .receipt-footer { margin-top: 8px; text-align: center; }
+        .thank-you { font-weight: bold; font-size: 13px; margin: 3px 0; }
+        .return-policy { font-size: 9px; margin: 2px 0; }
+        .print-date { font-size: 8px; color: #666; margin-top: 5px; }
+        
+        @media print {
+            @page { margin: 0; size: 80mm auto; }
+            body { width: 80mm; margin: 0; padding: 2mm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-header text-center">
+        <div class="company-name text-bold">PETIT KIOSQUE M.T.G</div>
+        <div class="company-details">Galerie G.T.B Numero 48</div>
+        <div class="company-details text-bold">Numéro Impôt: A1719046X</div>
+        <div class="company-details">Tel: +243 976 515 383 / +243 844 076 837</div>
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <div class="receipt-info">
+        <div class="info-line">
+            <span class="text-bold">REÇU DE PAIEMENT N°:</span>
+            <span class="text-bold">{{ paiement.id }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">FACTURE N°:</span>
+            <span class="text-bold">{{ facture.id }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">DATE:</span>
+            <span class="text-bold">{{ paiement.date_paiement.strftime('%d/%m/%Y') }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">HEURE:</span>
+            <span class="text-bold">{{ paiement.date_paiement.strftime('%H:%M') }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">CLIENT:</span>
+            <span class="text-bold">{{ facture.nom_client }}</span>
+        </div>
+    </div>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Section Articles achetés -->
+    <div class="items-section">
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th class="text-center">ARTICLE</th>
+                    <th class="text-center">QTE</th>
+                    <th class="text-center">PRIX</th>
+                    <th class="text-center">TOTAL</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for vente in ventes %}
+                <tr>
+                    <td class="text-left">{{ vente.produit.nom }}</td>
+                    <td class="text-center text-bold">{{ vente.quantite }}</td>
+                    <td class="text-right text-bold">{{ "%.2f"|format(vente.montant_total/vente.quantite) }}$</td>
+                    <td class="text-right text-bold">{{ "%.2f"|format(vente.montant_total) }}$</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Section Résumé de la facture -->
+    <div class="receipt-info">
+        <div class="info-line">
+            <span class="text-bold">TOTAL FACTURE:</span>
+            <span class="text-bold">{{ "%.2f"|format(facture.montant_total) }} $</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">DÉJÀ PAYÉ:</span>
+            <span class="text-bold text-success">{{ "%.2f"|format(facture.montant_cash) }} $</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">RESTE À PAYER:</span>
+            <span class="text-bold text-danger">{{ "%.2f"|format(facture.montant_credit) }} $</span>
+        </div>
+    </div>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Section Détails du paiement actuel -->
+    <div class="framed-section">
+        <div class="payment-line">
+            <span class="text-bold">MONTANT PAYÉ:</span>
+            <span class="text-bold text-success">{{ "%.2f"|format(paiement.montant) }} $</span>
+        </div>
+        <div class="payment-line">
+            <span class="text-bold">MODE DE PAIEMENT:</span>
+            <span class="text-bold text-capitalize">{{ paiement.mode_paiement }}</span>
+        </div>
+        {% if paiement.description %}
+        <div class="payment-line">
+            <span class="text-bold">DESCRIPTION:</span>
+            <span class="text-bold">{{ paiement.description }}</span>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <div class="receipt-footer">
+        <div class="thank-you">Merci pour votre confiance !</div>
+        <div class="return-policy text-bold">Ce reçu atteste du paiement partiel de la facture {{ facture.id }}</div>
+        <div class="return-policy text-bold">Les marchandises vendues ne sont ni remboursables ni échangées</div>
+        <div class="return-policy text-bold">À bientôt chez PETIT KIOSQUE M.T.G</div>
+        <div class="print-date">{{ paiement.date_paiement.strftime('Imprimé le %d/%m/%Y à %H:%M') }}</div>
+    </div>
+
+    <script>
+        window.onload = function() {
+            setTimeout(function() {
+                window.print();
+            }, 500);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,858 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestion des Factures - MKM Shop{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête amélioré -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-file-invoice me-2 text-primary"></i>Gestion des Factures
+            </h1>
+            <p class="text-muted small mb-0">Consultation et gestion de l'historique des factures</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-primary fs-6">
+                <i class="fas fa-receipt me-1"></i>
+                {{ factures|length }} facture(s)
+            </span>
+        </div>
+    </div>
+
+    <!-- Messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle me-2 fs-5"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fas fa-exclamation-triangle me-2 fs-5"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle me-2 fs-5"></i>
+                            {% endif %}
+                            <div class="flex-grow-1">{{ message }}</div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Formulaire de recherche et filtrage -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-primary text-white py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-search me-2"></i> Rechercher et Filtrer
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('routes.factures') }}" id="filterForm">
+                <div class="row g-3">
+                    <!-- Recherche par nom client -->
+                    <div class="col-md-4">
+                        <label for="search" class="form-label fw-semibold">Nom du client</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-user text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   value="{{ search_term }}" placeholder="Rechercher par nom client...">
+                        </div>
+                    </div>
+
+                    <!-- Filtre par date de début -->
+                    <div class="col-md-3">
+                        <label for="start_date" class="form-label fw-semibold">Date de début</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-calendar-start text-muted"></i>
+                            </span>
+                            <input type="date" class="form-control" id="start_date" name="start_date">
+                        </div>
+                    </div>
+
+                    <!-- Filtre par date de fin -->
+                    <div class="col-md-3">
+                        <label for="end_date" class="form-label fw-semibold">Date de fin</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-calendar-end text-muted"></i>
+                            </span>
+                            <input type="date" class="form-control" id="end_date" name="end_date">
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="d-grid gap-2 w-100">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Appliquer
+                            </button>
+                            <button type="button" id="resetFilters" class="btn btn-outline-secondary">
+                                <i class="fas fa-sync-alt me-1"></i> Réinitialiser
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des factures -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-success text-white py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-list me-2"></i> Liste des Factures
+                <span class="badge bg-light text-success ms-2 fs-6">{{ factures|length }}</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if factures %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center">#ID</th>
+                            <th>Client</th>
+                            <th class="text-center">Mode Paiement</th>
+                            <th class="text-end">Montant Total</th>
+                            <th class="text-end">Cash</th>
+                            <th class="text-end">Crédit</th>
+                            <th class="text-center">Date</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for facture in factures %}
+                        <tr class="facture-row" 
+                            data-id="{{ facture.id }}" 
+                            data-client="{{ facture.nom_client|lower }}" 
+                            data-date="{{ facture.date_facture.strftime('%Y-%m-%d') }}"
+                            data-montant="{{ facture.montant_total }}"
+                            data-facture='{{ {
+                                "id": facture.id,
+                                "nom_client": facture.nom_client,
+                                "montant_total": facture.montant_total,
+                                "date_facture": facture.date_facture.strftime("%d/%m/%Y %H:%M"),
+                                "paiement_credit": facture.paiement_credit,
+                                "montant_cash": facture.montant_cash,
+                                "montant_credit": facture.montant_credit
+                            }|tojson }}'>
+                            <td class="text-center fw-bold text-primary">{{ facture.id }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-circle text-muted me-2"></i>
+                                    <span class="fw-semibold">{{ facture.nom_client }}</span>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                {% if facture.paiement_credit %}
+                                <span class="badge bg-warning text-dark">
+                                    <i class="fas fa-credit-card me-1"></i>Crédit
+                                </span>
+                                {% else %}
+                                <span class="badge bg-success">
+                                    <i class="fas fa-money-bill-wave me-1"></i>Comptant
+                                </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end fw-bold text-primary">{{ "%.2f"|format(facture.montant_total) }} $</td>
+                            <td class="text-end text-success fw-semibold">{{ "%.2f"|format(facture.montant_cash) }} $</td>
+                            <td class="text-end text-warning fw-semibold">{{ "%.2f"|format(facture.montant_credit) }} $</td>
+                            <td class="text-center">
+                                <div class="d-flex flex-column">
+                                    <small class="text-muted">{{ facture.date_facture.strftime('%d/%m/%Y') }}</small>
+                                    <small class="text-muted">{{ facture.date_facture.strftime('%H:%M') }}</small>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-primary view-details" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#detailsFactureModal"
+                                            data-facture-id="{{ facture.id }}"
+                                            title="Voir les détails">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary imprimer-facture-btn"
+                                            data-facture-id="{{ facture.id }}"
+                                            title="Imprimer la facture">
+                                        <i class="fas fa-print"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Résumé statistique -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-primary text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">Total Factures</h6>
+                            <h4 class="mb-0">{{ factures|length }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">Total Ventes</h6>
+                            <h4 class="mb-0">{{ "%.2f"|format(factures|sum(attribute='montant_total')) }} $</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">En Comptant</h6>
+                            <h4 class="mb-0">{{ "%.2f"|format(factures|selectattr('paiement_credit', 'equalto', false)|sum(attribute='montant_total')) }} $</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">En Crédit</h6>
+                            <h4 class="mb-0">{{ "%.2f"|format(factures|selectattr('paiement_credit')|sum(attribute='montant_credit')) }} $</h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- État vide -->
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-file-invoice fa-4x text-muted"></i>
+                </div>
+                <h4 class="text-muted mb-3">Aucune facture trouvée</h4>
+                <p class="text-muted mb-4">
+                    {% if search_term %}
+                    Aucune facture ne correspond à votre recherche "{{ search_term }}"
+                    {% else %}
+                    Aucune facture n'a été enregistrée pour le moment.
+                    {% endif %}
+                </p>
+                {% if not search_term %}
+                <a href="{{ url_for('routes.ventes') }}" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i> Créer une première vente
+                </a>
+                {% else %}
+                <button onclick="resetSearch()" class="btn btn-outline-primary">
+                    <i class="fas fa-sync-alt me-1"></i> Afficher toutes les factures
+                </button>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modale pour les détails de la facture -->
+<div class="modal fade" id="detailsFactureModal" tabindex="-1" aria-labelledby="detailsFactureModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="detailsFactureModalLabel">
+                    <i class="fas fa-file-invoice me-2"></i> Détails de la Facture
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="factureDetailsContent">
+                    <!-- Le contenu sera chargé dynamiquement -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Fermer
+                </button>
+                <button type="button" class="btn btn-primary" onclick="imprimerFactureFromModal()">
+                    <i class="fas fa-print me-1"></i> Imprimer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts pour la gestion de la page -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const factureRows = document.querySelectorAll('.facture-row');
+        const resetFiltersBtn = document.getElementById('resetFilters');
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        const viewDetailsButtons = document.querySelectorAll('.view-details');
+        const imprimerFactureButtons = document.querySelectorAll('.imprimer-facture-btn');
+
+        // Fonction de filtrage côté client
+        function filterFactures() {
+            const startDate = startDateInput.value;
+            const endDate = endDateInput.value;
+            let visibleCount = 0;
+
+            factureRows.forEach(row => {
+                const rowDate = row.getAttribute('data-date');
+                let shouldShow = true;
+
+                // Filtrage par date
+                if (startDate && rowDate < startDate) {
+                    shouldShow = false;
+                }
+                if (endDate && rowDate > endDate) {
+                    shouldShow = false;
+                }
+
+                if (shouldShow) {
+                    row.style.display = '';
+                    visibleCount++;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            // Mettre à jour le compteur dans l'en-tête
+            const countBadge = document.querySelector('.card-header .badge');
+            if (countBadge) {
+                countBadge.textContent = visibleCount;
+            }
+        }
+
+        // Événements pour les filtres
+        if (startDateInput) {
+            startDateInput.addEventListener('change', filterFactures);
+        }
+        if (endDateInput) {
+            endDateInput.addEventListener('change', filterFactures);
+        }
+
+        // Réinitialisation des filtres
+        if (resetFiltersBtn) {
+            resetFiltersBtn.addEventListener('click', function() {
+                startDateInput.value = '';
+                endDateInput.value = '';
+                filterFactures();
+            });
+        }
+
+        // Gestion des détails de facture dans la modale
+        viewDetailsButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                chargerDetailsFacture(factureId);
+            });
+        });
+
+        // Gestion du bouton d'impression direct
+        imprimerFactureButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                imprimerFacture(factureId);
+            });
+        });
+
+        // Initialiser le filtrage
+        filterFactures();
+    });
+
+    // Fonction pour charger les détails d'une facture
+    function chargerDetailsFacture(factureId) {
+        fetch(`/factures/${factureId}/details.json`)
+            .then(response => response.json())
+            .then(data => {
+                afficherDetailsFacture(data);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                document.getElementById('factureDetailsContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Erreur lors du chargement des détails de la facture.
+                    </div>
+                `;
+            });
+    }
+
+    // Fonction pour afficher les détails dans la modale
+    function afficherDetailsFacture(data) {
+        const { facture, ventes } = data;
+        
+        let produitsHTML = '';
+        ventes.forEach(vente => {
+            produitsHTML += `
+                <tr>
+                    <td>${vente.produit_nom}</td>
+                    <td class="text-center">${vente.quantite}</td>
+                    <td class="text-end">${vente.prix_unitaire.toFixed(2)} $</td>
+                    <td class="text-end fw-bold">${vente.montant_total.toFixed(2)} $</td>
+                </tr>
+            `;
+        });
+
+        const modalContent = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i>Informations Facture</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">N° Facture:</td>
+                                    <td class="text-end fw-bold text-primary">${facture.id}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Client:</td>
+                                    <td class="text-end">${facture.nom_client}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Date:</td>
+                                    <td class="text-end">${facture.date_facture}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Mode Paiement:</td>
+                                    <td class="text-end">
+                                        ${facture.paiement_credit ? 
+                                            '<span class="badge bg-warning text-dark"><i class="fas fa-credit-card me-1"></i>Crédit</span>' : 
+                                            '<span class="badge bg-success"><i class="fas fa-money-bill-wave me-1"></i>Comptant</span>'}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0"><i class="fas fa-money-bill-wave me-2"></i>Détails Paiement</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">Total:</td>
+                                    <td class="text-end fw-bold text-primary">${facture.montant_total.toFixed(2)} $</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Payé en cash:</td>
+                                    <td class="text-end text-success">${facture.montant_cash.toFixed(2)} $</td>
+                                </tr>
+                                ${facture.paiement_credit ? `
+                                <tr>
+                                    <td class="fw-semibold">Reste crédit:</td>
+                                    <td class="text-end text-warning">${facture.montant_credit.toFixed(2)} $</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0"><i class="fas fa-boxes me-2"></i>Produits Vendus</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Produit</th>
+                                    <th class="text-center">Quantité</th>
+                                    <th class="text-end">Prix Unitaire</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${produitsHTML}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-success">
+                                    <td colspan="3" class="text-end fw-bold">Total Général:</td>
+                                    <td class="text-end fw-bold">${facture.montant_total.toFixed(2)} $</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('factureDetailsContent').innerHTML = modalContent;
+        
+        // Stocker l'ID de la facture pour l'impression
+        document.getElementById('detailsFactureModal').setAttribute('data-current-facture-id', facture.id);
+    }
+
+    // Fonction pour imprimer depuis la modale
+    function imprimerFactureFromModal() {
+        const factureId = document.getElementById('detailsFactureModal').getAttribute('data-current-facture-id');
+        if (factureId) {
+            imprimerFacture(factureId);
+        }
+    }
+
+    // Fonction d'impression optimisée pour imprimante thermique 80mm
+    function imprimerFacture(factureId) {
+        console.log("Impression pour imprimante thermique 80mm...");
+        
+        // Récupérer les données de la facture
+        const factureRow = document.querySelector(`.facture-row[data-id="${factureId}"]`);
+        if (!factureRow) return;
+        
+        const factureData = JSON.parse(factureRow.getAttribute('data-facture'));
+        
+        // Charger les détails des ventes pour cette facture
+        fetch(`/factures/${factureId}/details.json`)
+            .then(response => response.json())
+            .then(data => {
+                genererEtImprimerFacture(data.facture, data.ventes);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                alert('Erreur lors du chargement des détails de la facture');
+            });
+    }
+
+    // Fonction pour générer et imprimer la facture
+    function genererEtImprimerFacture(facture, ventes) {
+        // Créer un contenu HTML optimisé pour l'impression thermique
+        const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Facture ${facture.id}</title>
+    <meta charset="UTF-8">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.2;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 2mm;
+            background: white;
+            color: black;
+        }
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        .text-bold { font-weight: bold; }
+        
+        .receipt-header {
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+        }
+        .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+        .company-details {
+            font-size: 9px;
+            margin: 1px 0;
+        }
+        .receipt-divider {
+            text-align: center;
+            margin: 5px 0;
+            font-weight: bold;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 3px;
+        }
+        .info-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 5px 0;
+        }
+        .items-table th {
+            border: 1px solid black;
+            padding: 3px 2px;
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        .items-table td {
+            border: 1px solid black;
+            padding: 2px 2px;
+        }
+        .framed-section {
+            border: 1px solid black;
+            padding: 5px;
+            margin: 8px 0;
+        }
+        .total-line {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .payment-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+        }
+        .payment-details {
+            margin-top: 5px;
+            padding-top: 3px;
+            border-top: 1px dashed #000;
+        }
+        .receipt-footer {
+            margin-top: 8px;
+            text-align: center;
+        }
+        .thank-you {
+            font-weight: bold;
+            font-size: 13px;
+            margin: 3px 0;
+        }
+        .return-policy {
+            font-size: 9px;
+            margin: 2px 0;
+        }
+        .print-date {
+            font-size: 8px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        /* Configuration d'impression spécifique pour 80mm */
+        @media print {
+            @page {
+                margin: 0;
+                size: 80mm auto;
+            }
+            body {
+                width: 80mm;
+                margin: 0;
+                padding: 2mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- En-tête du ticket -->
+    <div class="receipt-header text-center">
+        <div class="company-name text-bold">PETIT KIOSQUE M.T.G</div>
+        <div class="company-details">Galerie G.T.B Numero 48</div>
+        <div class="company-details text-bold">Numéro Impôt: A1719046X</div>
+        <div class="company-details">Tel: +243 976 515 383 / +243 844 076 837</div>
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <!-- Informations de la facture -->
+    <div class="receipt-info">
+        <div class="info-line">
+            <span class="text-bold">FACTURE N°:</span>
+            <span class="text-bold">${facture.id}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">DATE:</span>
+            <span class="text-bold">${facture.date_facture.split(' ')[0]}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">HEURE:</span>
+            <span class="text-bold">${facture.date_facture.split(' ')[1]}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">CLIENT:</span>
+            <span class="text-bold">${facture.nom_client}</span>
+        </div>
+    </div>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Tableau des articles -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th class="text-center">DESCRIPTION</th>
+                <th class="text-center">QTE</th>
+                <th class="text-center">PRIX</th>
+                <th class="text-center">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${ventes.map(vente => `
+            <tr>
+                <td class="text-left">${vente.produit_nom}</td>
+                <td class="text-center text-bold">${vente.quantite}</td>
+                <td class="text-right text-bold">${parseFloat(vente.prix_unitaire).toFixed(2)}$</td>
+                <td class="text-right text-bold">${parseFloat(vente.montant_total).toFixed(2)}$</td>
+            </tr>
+            `).join('')}
+        </tbody>
+    </table>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Section Total -->
+    <div class="framed-section">
+        <div class="total-line">
+            <span class="text-bold">TOTAL GÉNÉRAL:</span>
+            <span class="text-bold">${parseFloat(facture.montant_total).toFixed(2)}$</span>
+        </div>
+    </div>
+
+    <!-- Informations de paiement -->
+    <div class="framed-section">
+        ${facture.paiement_credit ? `
+        <div class="payment-line">
+            <span class="text-bold">MODE DE PAIEMENT:</span>
+            <span class="text-bold" style="color: #d9534f;">CRÉDIT</span>
+        </div>
+        <div class="payment-details">
+            <div class="payment-line">
+                <span class="text-bold">MONTANT PAYÉ:</span>
+                <span class="text-bold">${parseFloat(facture.montant_cash).toFixed(2)}$</span>
+            </div>
+            <div class="payment-line">
+                <span class="text-bold">RESTE À PAYER:</span>
+                <span class="text-bold">${parseFloat(facture.montant_credit).toFixed(2)}$</span>
+            </div>
+        </div>
+        ` : `
+        <div class="payment-line">
+            <span class="text-bold">MODE DE PAIEMENT:</span>
+            <span class="text-bold" style="color: #5cb85c;">COMPTANT</span>
+        </div>
+        <div class="payment-details">
+            <div class="payment-line">
+                <span class="text-bold">MONTANT REÇU:</span>
+                <span class="text-bold">${parseFloat(facture.montant_total).toFixed(2)}$</span>
+            </div>
+        </div>
+        `}
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <!-- Pied de page -->
+    <div class="receipt-footer">
+        <div class="thank-you">Merci pour votre confiance !</div>
+        <div class="return-policy text-bold"> Les Marchandises vendues ne sont ni remboursables ni échangables.</div>
+        <div class="return-policy text-bold">À bientôt chez PETIT KIOSQUE M.T.G</div>
+        <div class="print-date">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</div>
+    </div>
+</body>
+</html>`;
+
+        // Ouvrir une nouvelle fenêtre pour l'impression
+        const printWindow = window.open('', '_blank', 'width=80mm,height=600');
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+
+        // Attendre que le contenu soit chargé puis imprimer
+        printWindow.onload = function() {
+            setTimeout(() => {
+                printWindow.print();
+                // printWindow.close(); // Décommentez pour fermer automatiquement après impression
+            }, 500);
+        };
+    }
+
+    // Fonction pour réinitialiser la recherche
+    function resetSearch() {
+        window.location.href = "{{ url_for('routes.factures') }}";
+    }
+</script>
+
+<!-- Styles supplémentaires -->
+<style>
+    .card {
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .card-header {
+        border-radius: 10px 10px 0 0 !important;
+        border-bottom: none;
+    }
+    
+    .table th {
+        border-top: none;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 12px 8px;
+    }
+    
+    .facture-row:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+    
+    .btn-group .btn {
+        border-radius: 6px;
+        margin: 0 2px;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
+    }
+
+    .modal-xl {
+        max-width: 1200px;
+    }
+
+    @media (max-width: 768px) {
+        .container-fluid {
+            padding: 10px;
+        }
+        
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .btn-group .btn {
+            margin: 2px 0;
+            border-radius: 4px;
+        }
+        
+        .d-flex.justify-content-between.align-items-center.mb-4 {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+        
+        .d-flex.align-items-center {
+            margin-top: 10px;
+        }
+
+        .modal-xl {
+            max-width: 95%;
+            margin: 10px auto;
+        }
+    }
+</style>
+{% endblock %}

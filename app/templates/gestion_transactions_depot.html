@@ -1,0 +1,357 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestion des Transactions de Produits du Depot{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-5 text-center"><i class="fas fa-exchange-alt"></i> Gestion des Transactions de Produits du Depot</h1>
+
+    <!-- Afficher les messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Formulaire pour ajouter une transaction de produit -->
+    <div class="card mt-4 shadow-sm border-0">
+        <div class="card-header text-white" style="background-color: #2C3E50;">
+            <h5 class="card-title mb-0"><i class="fas fa-plus-circle me-2"></i> Ajouter une transaction de produit</h5>
+        </div>
+        <div class="card-body" style="background-color: #F8F9FA;">
+            <form id="transactionProduitForm" action="{{ url_for('routes.ajouter_transaction_depot') }}" method="POST">
+                <!-- Bouton pour ouvrir la modale de sélection des produits -->
+                <div class="mb-4">
+                    <button type="button" class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#produitModal">
+                        <i class="fas fa-search me-2"></i> Sélectionner un produit
+                    </button>
+                </div>
+
+                <!-- Champ pour afficher le nom du produit sélectionné -->
+                <div class="mb-4">
+                    <label for="nom_produit" class="form-label text-dark fw-bold">Produit sélectionné</label>
+                    <input type="text" id="nom_produit" class="form-control" readonly>
+                </div>
+
+                <!-- Champ caché pour l'ID du produit -->
+                <input type="hidden" id="produit_id" name="produit_id">
+
+                <!-- Sélection du type de transaction -->
+                <div class="mb-4">
+                    <label for="type_transaction" class="form-label text-dark fw-bold">Type de transaction</label>
+                    <select class="form-select" id="type_transaction" name="type_transaction" required>
+                        <option value="entree">Entrée</option>
+                        <option value="sortie">Sortie</option>
+                    </select>
+                </div>
+
+                <!-- Champ de quantité -->
+                <div class="mb-4">
+                    <label for="quantite" class="form-label text-dark fw-bold">Quantité</label>
+                    <input type="number" class="form-control" id="quantite" name="quantite" required>
+                </div>
+
+                <!-- Champ de description -->
+                <div class="mb-4">
+                    <label for="description" class="form-label text-dark fw-bold">Description</label>
+                    <textarea class="form-control" id="description" name="description" rows="3" placeholder="Ajouter une description..."></textarea>
+                </div>
+
+                <!-- Bouton de soumission -->
+                <button type="submit" class="btn text-white w-100 py-2 fw-bold" style="background-color: #2980B9;">
+                    <i class="fas fa-save me-2"></i> Ajouter
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modale pour la sélection des produits -->
+    <div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="produitModalLabel">Sélectionner un produit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Champ de recherche dans la modale -->
+                    <div class="mb-3">
+                        <input type="text" id="searchProduitModal" class="form-control" placeholder="Rechercher un produit...">
+                    </div>
+
+                    <!-- Liste des produits dans la modale -->
+                    <div id="produitListModal" class="list-group">
+                        {% for produit in produits %}
+                        <a href="#" class="list-group-item list-group-item-action" data-id="{{ produit.id }}" data-nom="{{ produit.nom }}">
+                            {{ produit.nom }} ({{ produit.quantite_depot }} en Depot)
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des transactions de produits -->
+    <div class="card mt-4 shadow-sm border-0">
+        <div class="card-header text-white" style="background-color: #27AE60;">
+            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i> Historique des transactions de produits</h5>
+            <!-- Filtre de recherche -->
+            <div class="row mt-3 g-3">
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" id="searchTransactionProduit" class="form-control" placeholder="Rechercher une transaction...">
+                    </div>
+                </div>
+                <!-- Filtre de date de début -->
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                        <input type="date" id="filterDateStartProduit" class="form-control" placeholder="Date de début">
+                    </div>
+                </div>
+                <!-- Filtre de date de fin -->
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
+                        <input type="date" id="filterDateEndProduit" class="form-control" placeholder="Date de fin">
+                    </div>
+                </div>
+                <!-- Filtre de type -->
+                <div class="col-md-3">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-filter"></i></span>
+                        <select id="filterTypeProduit" class="form-select">
+                            <option value="">Tous les types</option>
+                            <option value="entree">Entrée</option>
+                            <option value="sortie">Sortie</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <!-- Boutons de réinitialisation et d'impression -->
+            <div class="mt-3">
+                <button id="resetFiltersProduit" class="btn btn-secondary btn-sm me-2">
+                    <i class="fas fa-sync-alt me-2"></i>Réinitialiser les filtres
+                </button>
+                <button id="printButtonProduit" class="btn btn-light btn-sm">
+                    <i class="fas fa-print me-2"></i>Imprimer
+                </button>
+            </div>
+        </div>
+        <div class="card-body" style="background-color: #F8F9FA;">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped">
+                    <thead class="table-light">
+                        <tr>
+                            <th><i class="fas fa-calendar-alt me-2"></i>Date</th>
+                            <th><i class="fas fa-box me-2"></i>Produit</th>
+                            <th><i class="fas fa-exchange-alt me-2"></i>Type</th>
+                            <th><i class="fas fa-hashtag me-2"></i>Quantité</th>
+                            <th><i class="fas fa-align-left me-2"></i>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionProduitTableBody">
+                        {% if transactions %}
+                            {% for transactions in transactions %}
+                            <tr data-type="{{ transactions.type }}" data-date="{{ transactions.date_transaction.strftime('%Y-%m-%d') }}">
+                                <td>{{ transactions.date_transaction.strftime('%d/%m/%Y %H:%M') }}</td>
+                                <td>{{ transactions.produit.nom }}</td>
+                                <td>
+                                    {% if transactions.type_transaction == 'entree' %}
+                                        <span class="badge bg-success">Entrée</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Sortie</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ transactions.quantite }}</td>
+                                <td>{{ transactions.description }}</td>
+                            </tr>
+                            {% endfor %}
+                        {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">Aucune transaction trouvée.</td>
+                            </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            <!-- Message si aucun résultat n'est trouvé -->
+            <div id="noResultsProduit" class="text-center mt-4" style="display: none;">
+                <i class="fas fa-exclamation-circle fa-2x text-muted"></i>
+                <p class="mt-2 text-muted">Aucune transaction de produit ne correspond à vos critères de recherche.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script pour la gestion des transactions de produits -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchProduitModal = document.getElementById('searchProduitModal');
+        const produitListModal = document.getElementById('produitListModal');
+        const produitIdInput = document.getElementById('produit_id');
+        const nomProduitInput = document.getElementById('nom_produit');
+
+        // Recherche dans la modale
+        searchProduitModal.addEventListener('input', function() {
+            const query = searchProduitModal.value.toLowerCase();
+            const produits = produitListModal.querySelectorAll('.list-group-item');
+            produits.forEach(produit => {
+                const produitText = produit.textContent.toLowerCase();
+                if (produitText.includes(query)) {
+                    produit.style.display = 'block';
+                } else {
+                    produit.style.display = 'none';
+                }
+            });
+        });
+
+        // Sélection d'un produit dans la modale
+        produitListModal.addEventListener('click', function(event) {
+            if (event.target.classList.contains('list-group-item')) {
+                const produit = event.target;
+                produitIdInput.value = produit.dataset.id; // Remplir l'ID du produit
+                nomProduitInput.value = produit.dataset.nom; // Remplir le nom du produit
+                bootstrap.Modal.getInstance(document.getElementById('produitModal')).hide(); // Fermer la modale
+            }
+        });
+
+        // Gestion des filtres pour le tableau des transactions de produits
+        function filterTransactionsProduit() {
+            const searchTerm = searchTransactionProduit.value.toLowerCase();
+            const filterDateStartValue = filterDateStartProduit.value;
+            const filterDateEndValue = filterDateEndProduit.value;
+            const filterTypeValue = filterTypeProduit.value.toLowerCase();
+            const rows = transactionProduitTableBody.getElementsByTagName('tr');
+            let visibleRows = 0;
+
+            for (let row of rows) {
+                const type = row.getAttribute('data-type');
+                const date = row.getAttribute('data-date');
+                const cells = row.getElementsByTagName('td');
+                let matchSearch = false;
+                let matchDate = true;
+                let matchType = true;
+
+                // Filtre par recherche
+                for (let cell of cells) {
+                    if (cell.textContent.toLowerCase().includes(searchTerm)) {
+                        matchSearch = true;
+                        break;
+                    }
+                }
+
+                // Filtre par plage de dates
+                if (filterDateStartValue && date < filterDateStartValue) {
+                    matchDate = false;
+                }
+                if (filterDateEndValue && date > filterDateEndValue) {
+                    matchDate = false;
+                }
+
+                // Filtre par type
+                if (filterTypeValue && type !== filterTypeValue) {
+                    matchType = false;
+                }
+
+                // Afficher ou masquer la ligne en fonction des filtres
+                if (matchSearch && matchDate && matchType) {
+                    row.style.display = '';
+                    visibleRows++;
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+
+            // Afficher un message si aucun résultat n'est trouvé
+            noResultsProduit.style.display = visibleRows === 0 ? 'block' : 'none';
+        }
+
+        // Réinitialiser les filtres
+        resetFiltersProduit.addEventListener('click', function() {
+            searchTransactionProduit.value = '';
+            filterDateStartProduit.value = '';
+            filterDateEndProduit.value = '';
+            filterTypeProduit.value = '';
+            filterTransactionsProduit();
+        });
+
+        // Imprimer l'historique des transactions de produits
+        printButtonProduit.addEventListener('click', function() {
+            const printContents = `
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <h1 style="font-size: 24px; margin-bottom: 10px;">Nom de l'entreprise</h1>
+                    <h3 style="font-size: 18px; margin-bottom: 10px;">Historique des transactions de produits</h3>
+                    <p style="font-size: 14px; color: #555;">
+                        Période : ${filterDateStartProduit.value || 'Toutes dates'} - ${filterDateEndProduit.value || 'Toutes dates'}
+                    </p>
+                    <p style="font-size: 12px; color: #777;">
+                        Date d'impression : ${new Date().toLocaleString()}
+                    </p>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Produit</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Quantité</th>
+                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${Array.from(transactionProduitTableBody.querySelectorAll('tr'))
+                            .filter(row => row.style.display !== 'none')
+                            .map(row => `
+                                <tr>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[0].textContent}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[1].textContent}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[2].innerHTML}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[3].textContent}</td>
+                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[4].textContent}</td>
+                                </tr>
+                            `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            const printWindow = window.open('', '', 'height=600,width=800');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Historique des transactions de produits</title>
+                        <style>
+                            body { font-family: Arial, sans-serif; margin: 20px; }
+                            table { width: 100%; border-collapse: collapse; }
+                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                            th { background-color: #f2f2f2; }
+                            .badge { padding: 5px; border-radius: 5px; }
+                        </style>
+                    </head>
+                    <body>
+                        ${printContents}
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        });
+
+        // Appliquer les filtres lors de la modification des champs
+        searchTransactionProduit.addEventListener('input', filterTransactionsProduit);
+        filterDateStartProduit.addEventListener('change', filterTransactionsProduit);
+        filterDateEndProduit.addEventListener('change', filterTransactionsProduit);
+        filterTypeProduit.addEventListener('change', filterTransactionsProduit);
+    });
+</script>
+{% endblock %}

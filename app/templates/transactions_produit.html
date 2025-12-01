@@ -1,0 +1,136 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestion des Transactions de Produits{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mt-5 text-center"><i class="fas fa-exchange-alt"></i> Gestion des Transactions de Produits</h1>
+
+    <!-- Afficher les messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Bouton pour ouvrir la modale -->
+    <button type="button" class="btn btn-primary mt-4" data-bs-toggle="modal" data-bs-target="#produitModal">
+        <i class="fas fa-search me-2"></i> Sélectionner un produit
+    </button>
+
+    <!-- Champ pour afficher le produit sélectionné -->
+    <div class="mt-4">
+        <label for="nom_produit" class="form-label">Produit sélectionné</label>
+        <input type="text" id="nom_produit" class="form-control" readonly>
+    </div>
+
+    <!-- Champ caché pour l'ID du produit -->
+    <input type="hidden" id="produit_id">
+
+    <!-- Modale pour la sélection des produits -->
+    <div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="produitModalLabel">Sélectionner un produit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <!-- Champ de recherche dans la modale -->
+                    <div class="mb-3">
+                        <input type="text" id="searchProduitModal" class="form-control" placeholder="Rechercher un produit...">
+                    </div>
+
+                    <!-- Liste des produits dans la modale -->
+                    <div id="produitListModal" class="list-group">
+                        {% for produit in produits %}
+                        <a href="#" class="list-group-item list-group-item-action" data-id="{{ produit.id }}" data-nom="{{ produit.nom }}">
+                            {{ produit.nom }} ({{ produit.quantite }} en stock)
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Liste des transactions -->
+    <div class="card mt-4 shadow-sm">
+        <div class="card-header bg-success text-white">
+            <h5 class="card-title"><i class="fas fa-list"></i> Historique des transactions</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Produit</th>
+                        <th>Type</th>
+                        <th>Quantité</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for transaction in transactions %}
+                    <tr>
+                        <td>{{ transaction.date_transaction.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td>{{ transaction.produit.nom }}</td>
+                        <td>
+                            {% if transaction.type == 'entree' %}
+                                <span class="badge bg-success">Entrée</span>
+                            {% else %}
+                                <span class="badge bg-danger">Sortie</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ transaction.quantite }}</td>
+                        <td>{{ transaction.description }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Script pour la gestion de la modale et de la sélection des produits -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchProduitModal = document.getElementById('searchProduitModal');
+        const produitListModal = document.getElementById('produitListModal');
+        const produitIdInput = document.getElementById('produit_id');
+        const nomProduitInput = document.getElementById('nom_produit');
+
+        // Recherche dans la modale
+        searchProduitModal.addEventListener('input', function() {
+            const query = searchProduitModal.value.toLowerCase();
+            const produits = produitListModal.querySelectorAll('.list-group-item');
+            produits.forEach(produit => {
+                const produitText = produit.textContent.toLowerCase();
+                if (produitText.includes(query)) {
+                    produit.style.display = 'block';
+                } else {
+                    produit.style.display = 'none';
+                }
+            });
+        });
+
+        // Sélection d'un produit dans la modale
+        produitListModal.addEventListener('click', function(event) {
+            if (event.target.classList.contains('list-group-item')) {
+                const produit = event.target;
+                produitIdInput.value = produit.dataset.id; // Remplir l'ID du produit
+                nomProduitInput.value = produit.dataset.nom; // Remplir le nom du produit
+                bootstrap.Modal.getInstance(document.getElementById('produitModal')).hide(); // Fermer la modale
+            }
+        });
+    });
+</script>
+{% endblock %}
