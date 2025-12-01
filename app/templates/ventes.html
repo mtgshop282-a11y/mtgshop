@@ -1,0 +1,1154 @@
+{% extends "layout.html" %}
+
+{% block title %}Gestion des Ventes - MKM Shop{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête amélioré -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-cash-register text-primary me-2"></i>Point de Vente
+            </h1>
+            <p class="text-muted small mb-0">Système de gestion des ventes</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-success fs-6 me-3">
+                <i class="fas fa-shopping-cart me-1"></i>
+                <span id="panier-count">{{ panier|length if panier else 0 }}</span> article(s)
+            </span>
+            <span class="badge bg-primary fs-6">
+                <i class="fas fa-dollar-sign me-1"></i>
+                <span id="panier-total">{{ "%.2f"|format(total) if panier else "0.00" }}</span> $
+            </span>
+        </div>
+    </div>
+
+    <!-- Messages flash améliorés -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle me-2 fs-5"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fas fa-exclamation-triangle me-2 fs-5"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle me-2 fs-5"></i>
+                            {% endif %}
+                            <div class="flex-grow-1">{{ message }}</div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Interface principale responsive -->
+    <div class="row g-4">
+        <!-- Section Ajout de produits -->
+        <div class="col-xl-6 col-lg-12">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-primary text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center">
+                        <i class="fas fa-plus-circle me-2"></i> Ajouter un produit au panier
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form id="ajouterProduitForm" action="{{ url_for('routes.ventes') }}" method="POST">
+                        <!-- Bouton pour ouvrir la modale -->
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-primary w-100 d-flex align-items-center justify-content-center py-2" data-bs-toggle="modal" data-bs-target="#produitModal">
+                                <i class="fas fa-search me-2"></i> Sélectionner un produit
+                            </button>
+                        </div>
+
+                        <!-- Carte produit sélectionné -->
+                        <div class="card border-primary mb-3" id="produit-selectionne-card" style="display: none;">
+                            <div class="card-header bg-light py-2">
+                                <h6 class="card-title mb-0 fw-bold">Produit sélectionné</h6>
+                            </div>
+                            <div class="card-body py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0 fw-semibold" id="nom-produit-text">Nom du produit</h6>
+                                        <small class="text-muted" id="stock-produit-text">Stock: 0</small>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="badge bg-success fs-6 fw-bold" id="prix-produit-text">0.00 $</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="produit_id" name="produit_id">
+
+                        <!-- Tableau pour les champs quantité et prix -->
+                        <div class="table-responsive mb-3">
+                            <table class="table table-bordered table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="text-center">Quantité</th>
+                                        <th class="text-center">Prix unitaire ($)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="text-center">
+                                            <div class="input-group input-group-sm justify-content-center">
+                                                <button type="button" class="btn btn-outline-secondary" id="decrement-qte">
+                                                    <i class="fas fa-minus"></i>
+                                                </button>
+                                                <input type="number" class="form-control text-center mx-2" id="quantite" name="quantite" value="1" min="1" required style="width: 80px;">
+                                                <button type="button" class="btn btn-outline-secondary" id="increment-qte">
+                                                    <i class="fas fa-plus"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="number" class="form-control form-control-sm text-center" id="prix" name="prix" step="0.01" min="0.01" required style="width: 120px;">
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <button type="submit" name="ajouter_au_panier" class="btn btn-success w-100 mt-3 py-2 d-flex align-items-center justify-content-center" id="btn-ajouter-panier" disabled>
+                            <i class="fas fa-cart-plus me-2"></i> Ajouter au panier
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Panier -->
+        <div class="col-xl-6 col-lg-12">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-success text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center">
+                        <i class="fas fa-shopping-basket me-2"></i> Panier
+                    </h5>
+                </div>
+                <div class="card-body d-flex flex-column">
+                    {% if panier %}
+                    <div class="table-responsive flex-grow-1">
+                        <table class="table table-hover align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Produit</th>
+                                    <th class="text-center">Qté</th>
+                                    <th class="text-end">Prix U.</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in panier %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="flex-shrink-0">
+                                                <i class="fas fa-box text-primary me-2"></i>
+                                            </div>
+                                            <div class="flex-grow-1 ms-2">
+                                                <span class="fw-semibold">{{ item.produit.nom }}</span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">{{ item.quantite }}</td>
+                                    <td class="text-end">{{ "%.2f"|format(item.prix) }} $</td>
+                                    <td class="text-end fw-semibold">{{ "%.2f"|format(item.prix * item.quantite) }} $</td>
+                                    <td class="text-center">
+                                        <form action="{{ url_for('routes.ventes') }}" method="POST" class="d-inline">
+                                            <input type="hidden" name="panier_id" value="{{ item.id }}">
+                                            <button type="submit" name="supprimer_du_panier" class="btn btn-sm btn-outline-danger" title="Supprimer du panier">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="mt-auto pt-3 border-top">
+                        <!-- Tableau pour le total -->
+                        <div class="table-responsive mb-3">
+                            <table class="table table-bordered table-success">
+                                <tbody>
+                                    <tr>
+                                        <td class="fw-bold text-end" style="width: 50%;">Total:</td>
+                                        <td class="fw-bold text-success text-end" style="width: 50%;">{{ "%.2f"|format(total) }} $</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Bouton pour vider le panier -->
+                        <form action="{{ url_for('routes.ventes') }}" method="POST" class="mb-3">
+                            <button type="submit" name="vider_panier" class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center py-2" id="btn-vider-panier">
+                                <i class="fas fa-trash me-2"></i> Vider le panier
+                            </button>
+                        </form>
+
+                        <!-- Section Finalisation de vente -->
+                        <div class="card border-primary">
+                            <div class="card-header bg-light py-2">
+                                <h5 class="card-title mb-0 d-flex align-items-center">
+                                    <i class="fas fa-credit-card me-2"></i> Finaliser la vente
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <form action="{{ url_for('routes.ventes') }}" method="POST" id="finaliserForm">
+                                    <div class="mb-3">
+                                        <label for="nom_client" class="form-label fw-semibold">Nom du client</label>
+                                        <input type="text" class="form-control" id="nom_client" name="nom_client" required placeholder="Saisir le nom du client">
+                                    </div>
+                                    
+                                    <!-- Options de paiement avec tableau -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Mode de paiement</label>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-hover">
+                                                <tbody>
+                                                    <tr>
+                                                        <td class="text-center" style="width: 50%;">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="paiement_type" id="paiement_comptant" value="comptant" checked>
+                                                                <label class="form-check-label w-100" for="paiement_comptant">
+                                                                    <i class="fas fa-money-bill-wave d-block mb-1 text-success fs-4"></i>
+                                                                    <span class="fw-semibold">Comptant</span>
+                                                                </label>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center" style="width: 50%;">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="paiement_type" id="paiement_credit" value="credit">
+                                                                <label class="form-check-label w-100" for="paiement_credit">
+                                                                    <i class="fas fa-credit-card d-block mb-1 text-primary fs-4"></i>
+                                                                    <span class="fw-semibold">Crédit</span>
+                                                                </label>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Champ pour le montant en cash avec tableau -->
+                                    <div class="table-responsive" id="montant_cash_group" style="display: none;">
+                                        <table class="table table-bordered table-warning">
+                                            <tbody>
+                                                <tr>
+                                                    <td class="fw-semibold" style="width: 40%;">Montant payé en cash ($)</td>
+                                                    <td style="width: 60%;">
+                                                        <input type="number" class="form-control" id="montant_cash" name="montant_cash" step="0.01" min="0" value="{{ "%.2f"|format(total) }}" placeholder="0.00">
+                                                        <div class="form-text small">Le reste sera comptabilisé comme crédit</div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <button type="submit" name="finaliser_vente" class="btn btn-primary w-100 mt-3 py-2 d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-check-circle me-2"></i> Finaliser la vente
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="d-flex flex-column align-items-center justify-content-center text-center py-5">
+                        <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">Votre panier est vide</h5>
+                        <p class="text-muted mb-4">Ajoutez des produits pour commencer une vente</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#produitModal">
+                            <i class="fas fa-plus me-1"></i> Ajouter un produit
+                        </button>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- FACTURE OPTIMISÉE POUR IMPRIMANTE THERMIQUE 80mm -->
+    {% if facture is not none %}
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center justify-content-between">
+                        <span><i class="fas fa-receipt me-2"></i> Facture générée</span>
+                        <div>
+                            <span class="badge bg-light text-primary fs-6 me-2">N° {{ facture.id }}</span>
+                            <button type="button" onclick="imprimerFacture()" class="btn btn-light btn-sm">
+                                <i class="fas fa-print me-1"></i> Imprimer
+                            </button>
+                        </div>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <!-- Aperçu de la facture à l'écran -->
+                    <div class="thermal-receipt mx-auto" id="facture">
+                        <!-- En-tête du ticket -->
+                        <div class="receipt-header text-center">
+                            <h2 class="company-name"><strong>PETIT KIOSQUE M.T.G</strong></h2>
+                            <p class="company-address">Galerie G.T.B Numero 48</p>
+                            <p class="company-tax"><strong>Numéro Impôt: A1719046X</strong></p>
+                            <p class="company-phone">Tel: +243 976 515 383 / +243 844 076 837</p>
+                        </div>
+
+                        <div class="receipt-divider">================================</div>
+
+                        <!-- Informations de la facture -->
+                        <div class="receipt-info">
+                            <div class="info-line">
+                                <span class="label"><strong>FACTURE N°:</strong></span>
+                                <span class="value"><strong>{{ facture.id }}</strong></span>
+                            </div>
+                            <div class="info-line">
+                                <span class="label"><strong>DATE:</strong></span>
+                                <span class="value"><strong>{{ facture.date_facture.strftime('%d/%m/%Y') }}</strong></span>
+                            </div>
+                            <div class="info-line">
+                                <span class="label"><strong>HEURE:</strong></span>
+                                <span class="value"><strong>{{ facture.date_facture.strftime('%H:%M') }}</strong></span>
+                            </div>
+                            <div class="info-line">
+                                <span class="label"><strong>CLIENT:</strong></span>
+                                <span class="value"><strong>{{ facture.nom_client }}</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="receipt-divider">--------------------------------</div>
+
+                        <!-- Tableau des articles avec bordures complètes -->
+                        <div class="items-section">
+                            <table class="items-table bordered-table">
+                                <thead>
+                                    <tr class="table-header">
+                                        <th class="text-center border-cell"><strong>DESCRIPTION</strong></th>
+                                        <th class="text-center border-cell"><strong>QTE</strong></th>
+                                        <th class="text-center border-cell"><strong>PRIX</strong></th>
+                                        <th class="text-center border-cell"><strong>TOTAL</strong></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for vente in ventes %}
+                                    <tr class="item-row">
+                                        <td class="text-left border-cell item-name">{{ vente.produit.nom }}</td>
+                                        <td class="text-center border-cell item-qty"><strong>{{ vente.quantite }}</strong></td>
+                                        <td class="text-right border-cell item-price"><strong>{{ "%.2f"|format(vente.montant_total/vente.quantite) }}$</strong></td>
+                                        <td class="text-right border-cell item-total"><strong>{{ "%.2f"|format(vente.montant_total) }}$</strong></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="receipt-divider">--------------------------------</div>
+
+                        <!-- Section Total avec cadre -->
+                        <div class="total-section framed-section">
+                            <div class="total-line">
+                                <span class="label"><strong>TOTAL GÉNÉRAL:</strong></span>
+                                <span class="value"><strong>{{ "%.2f"|format(facture.montant_total) }}$</strong></span>
+                            </div>
+                        </div>
+                  
+                        <!-- Informations de paiement avec cadre -->
+                        <div class="payment-section framed-section">
+                            {% if facture.paiement_credit %}
+                            <div class="payment-line">
+                                <span class="label"><strong>MODE DE PAIEMENT:</strong></span>
+                                <span class="value credit"><strong>CRÉDIT</strong></span>
+                            </div>
+                            <div class="payment-details">
+                                <div class="payment-line">
+                                    <span class="label"><strong>MONTANT PAYÉ:</strong></span>
+                                    <span class="value"><strong>{{ "%.2f"|format(facture.montant_cash) if facture.montant_cash else 0 }}$</strong></span>
+                                </div>
+                                <div class="payment-line">
+                                    <span class="label"><strong>RESTE À PAYER:</strong></span>
+                                    <span class="value"><strong>{{ "%.2f"|format(facture.montant_total - (facture.montant_cash if facture.montant_cash else 0)) }}$</strong></span>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="payment-line">
+                                <span class="label"><strong>MODE DE PAIEMENT:</strong></span>
+                                <span class="value cash"><strong>COMPTANT</strong></span>
+                            </div>
+                            <div class="payment-details">
+                                <div class="payment-line">
+                                    <span class="label"><strong>MONTANT REÇU:</strong></span>
+                                    <span class="value"><strong>{{ "%.2f"|format(facture.montant_total) }}$</strong></span>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="receipt-divider">================================</div>
+
+                        <!-- Pied de page -->
+                        <div class="receipt-footer text-center">
+                            <p class="thank-you"><strong>Merci pour votre confiance !</strong></p>
+                            <p class="return-policy"><strong>Les Marchandises vendues ne sont ni remboursables ni échangables.</strong></p>
+                            <p class="visit-again"><strong>À bientôt chez PETIT KIOSQUE M.T.G</strong></p>
+                            <p class="print-date">{{ facture.date_facture.strftime('Imprimé le %d/%m/%Y à %H:%M') }}</p>
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div class="no-print text-center mt-4">
+                        <button type="button" onclick="imprimerFacture()" class="btn btn-primary btn-lg me-2">
+                            <i class="fas fa-print me-2"></i> Imprimer le ticket
+                        </button>
+                        <button type="button" onclick="fermerFacture()" class="btn btn-outline-secondary btn-lg">
+                            <i class="fas fa-times me-2"></i> Fermer
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Styles CSS pour l'impression thermique avec bordures -->
+    <style>
+        /* Conteneur principal pour l'impression thermique */
+        .thermal-receipt {
+            width: 80mm;
+            min-height: 100mm;
+            margin: 0 auto;
+            padding: 5mm;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.2;
+            background: white;
+            border: 1px solid #ccc;
+        }
+
+        /* En-tête */
+        .receipt-header {
+            margin-bottom: 8px;
+        }
+
+        .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin: 0 0 4px 0;
+            text-transform: uppercase;
+        }
+
+        .company-address,
+        .company-tax,
+        .company-phone {
+            font-size: 10px;
+            margin: 2px 0;
+        }
+
+        /* Séparateurs */
+        .receipt-divider {
+            text-align: center;
+            margin: 8px 0;
+            font-size: 10px;
+            color: #000;
+            font-weight: bold;
+        }
+
+        /* Informations de la facture */
+        .receipt-info {
+            margin: 10px 0;
+        }
+
+        .info-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            padding: 2px 0;
+        }
+
+        .info-line .label,
+        .info-line .value {
+            font-weight: bold;
+        }
+
+        /* Tableau des articles avec bordures */
+        .items-section {
+            margin: 10px 0;
+        }
+
+        .bordered-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid #000;
+        }
+
+        .table-header {
+            background-color: #f0f0f0;
+        }
+
+        .bordered-table th {
+            padding: 6px 3px;
+            text-align: center;
+            font-weight: bold;
+            border: 1px solid #000;
+        }
+
+        .border-cell {
+            border: 1px solid #000;
+            padding: 4px 3px;
+        }
+
+        .item-row {
+            border-bottom: 1px solid #000;
+        }
+
+        .bordered-table td {
+            vertical-align: top;
+        }
+
+        .item-name { 
+            text-align: left;
+            font-weight: normal;
+        }
+        .item-qty { 
+            text-align: center;
+            font-weight: bold;
+        }
+        .item-price { 
+            text-align: right;
+            font-weight: bold;
+        }
+        .item-total { 
+            text-align: right;
+            font-weight: bold;
+        }
+
+        /* Sections avec cadres */
+        .framed-section {
+            margin: 12px 0;
+            padding: 8px;
+            border: 2px solid #000;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+
+        /* Section Total */
+        .total-section .total-line {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 14px;
+            padding: 4px 0;
+        }
+
+        /* Section Paiement */
+        .payment-section .payment-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 4px 0;
+            font-weight: bold;
+        }
+
+        .payment-details {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px dashed #666;
+        }
+
+        .credit {
+            color: #d9534f;
+        }
+
+        .cash {
+            color: #5cb85c;
+        }
+
+        /* Pied de page */
+        .receipt-footer {
+            margin-top: 12px;
+        }
+
+        .thank-you {
+            font-weight: bold;
+            font-size: 14px;
+            margin: 8px 0;
+        }
+
+        .return-policy {
+            font-size: 10px;
+            margin: 4px 0;
+            font-weight: bold;
+        }
+
+        .visit-again {
+            font-style: italic;
+            margin: 6px 0;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .print-date {
+            font-size: 9px;
+            color: #666;
+            margin: 8px 0 0 0;
+        }
+
+        /* Style pour l'affichage à l'écran */
+        @media screen {
+            .thermal-receipt {
+                background: #f8f9fa;
+                border: 2px solid #dee2e6;
+                border-radius: 8px;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+
+            .framed-section {
+                background-color: #e9ecef !important;
+            }
+
+            .table-header {
+                background-color: #e9ecef !important;
+            }
+        }
+    </style>
+
+    <!-- Scripts pour l'impression OPTIMISÉ POUR IMPRIMANTE THERMIQUE 80mm -->
+    <script>
+        function imprimerFacture() {
+            console.log("Impression pour imprimante thermique 80mm...");
+            
+            // Créer un contenu HTML optimisé pour l'impression thermique
+            const printContent = `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Facture {{ facture.id }}</title>
+    <meta charset="UTF-8">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            line-height: 1.2;
+            width: 80mm;
+            margin: 0 auto;
+            padding: 2mm;
+            background: white;
+            color: black;
+        }
+        .text-center { text-align: center; }
+        .text-left { text-align: left; }
+        .text-right { text-align: right; }
+        .text-bold { font-weight: bold; }
+        
+        .receipt-header {
+            margin-bottom: 5px;
+            padding-bottom: 3px;
+        }
+        .company-name {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 2px;
+            text-transform: uppercase;
+        }
+        .company-details {
+            font-size: 9px;
+            margin: 1px 0;
+        }
+        .receipt-divider {
+            text-align: center;
+            margin: 5px 0;
+            font-weight: bold;
+            border-bottom: 1px dashed #000;
+            padding-bottom: 3px;
+        }
+        .info-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 5px 0;
+        }
+        .items-table th {
+            border: 1px solid black;
+            padding: 3px 2px;
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
+        .items-table td {
+            border: 1px solid black;
+            padding: 2px 2px;
+        }
+        .framed-section {
+            border: 1px solid black;
+            padding: 5px;
+            margin: 8px 0;
+        }
+        .total-line {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 13px;
+        }
+        .payment-line {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
+        }
+        .payment-details {
+            margin-top: 5px;
+            padding-top: 3px;
+            border-top: 1px dashed #000;
+        }
+        .receipt-footer {
+            margin-top: 8px;
+            text-align: center;
+        }
+        .thank-you {
+            font-weight: bold;
+            font-size: 13px;
+            margin: 3px 0;
+        }
+        .return-policy {
+            font-size: 9px;
+            margin: 2px 0;
+        }
+        .print-date {
+            font-size: 8px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        /* Configuration d'impression spécifique pour 80mm */
+        @media print {
+            @page {
+                margin: 0;
+                size: 80mm auto;
+            }
+            body {
+                width: 80mm;
+                margin: 0;
+                padding: 2mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- En-tête du ticket -->
+    <div class="receipt-header text-center">
+        <div class="company-name text-bold">PETIT KIOSQUE M.T.G</div>
+        <div class="company-details">Galerie G.T.B Numero 48</div>
+        <div class="company-details text-bold">Numéro Impôt: A1719046X</div>
+        <div class="company-details">Tel: +243 976 515 383 / +243 844 076 837</div>
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <!-- Informations de la facture -->
+    <div class="receipt-info">
+        <div class="info-line">
+            <span class="text-bold">FACTURE N°:</span>
+            <span class="text-bold">{{ facture.id }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">DATE:</span>
+            <span class="text-bold">{{ facture.date_facture.strftime('%d/%m/%Y') }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">HEURE:</span>
+            <span class="text-bold">{{ facture.date_facture.strftime('%H:%M') }}</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">CLIENT:</span>
+            <span class="text-bold">{{ facture.nom_client }}</span>
+        </div>
+    </div>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Tableau des articles -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th class="text-center">DESCRIPTION</th>
+                <th class="text-center">QTE</th>
+                <th class="text-center">PRIX</th>
+                <th class="text-center">TOTAL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for vente in ventes %}
+            <tr>
+                <td class="text-left">{{ vente.produit.nom }}</td>
+                <td class="text-center text-bold">{{ vente.quantite }}</td>
+                <td class="text-right text-bold">{{ "%.2f"|format(vente.montant_total/vente.quantite) }}$</td>
+                <td class="text-right text-bold">{{ "%.2f"|format(vente.montant_total) }}$</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="receipt-divider">--------------------------------</div>
+
+    <!-- Section Total -->
+    <div class="framed-section">
+        <div class="total-line">
+            <span class="text-bold">TOTAL GÉNÉRAL:</span>
+            <span class="text-bold">{{ "%.2f"|format(facture.montant_total) }}$</span>
+        </div>
+    </div>
+
+    <!-- Informations de paiement -->
+    <div class="framed-section">
+        {% if facture.paiement_credit %}
+        <div class="payment-line">
+            <span class="text-bold">MODE DE PAIEMENT:</span>
+            <span class="text-bold" style="color: #d9534f;">CRÉDIT</span>
+        </div>
+        <div class="payment-details">
+            <div class="payment-line">
+                <span class="text-bold">MONTANT PAYÉ:</span>
+                <span class="text-bold">{{ "%.2f"|format(facture.montant_cash) if facture.montant_cash else 0 }}$</span>
+            </div>
+            <div class="payment-line">
+                <span class="text-bold">RESTE À PAYER:</span>
+                <span class="text-bold">{{ "%.2f"|format(facture.montant_total - (facture.montant_cash if facture.montant_cash else 0)) }}$</span>
+            </div>
+        </div>
+        {% else %}
+        <div class="payment-line">
+            <span class="text-bold">MODE DE PAIEMENT:</span>
+            <span class="text-bold" style="color: #5cb85c;">COMPTANT</span>
+        </div>
+        <div class="payment-details">
+            <div class="payment-line">
+                <span class="text-bold">MONTANT REÇU:</span>
+                <span class="text-bold">{{ "%.2f"|format(facture.montant_total) }}$</span>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="receipt-divider">================================</div>
+
+    <!-- Pied de page -->
+    <div class="receipt-footer">
+        <div class="thank-you">Merci pour votre confiance !</div>
+        <div class="return-policy text-bold"> Les Marchandises vendues ne sont ni remboursables ni échangables.</div>
+        <div class="return-policy text-bold">À bientôt chez PETIT KIOSQUE M.T.G</div>
+        <div class="print-date">{{ facture.date_facture.strftime('Imprimé le %d/%m/%Y à %H:%M') }}</div>
+    </div>
+</body>
+</html>`;
+
+            // Ouvrir une nouvelle fenêtre pour l'impression
+            const printWindow = window.open('', '_blank', 'width=80mm,height=600');
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+
+            // Attendre que le contenu soit chargé puis imprimer
+            printWindow.onload = function() {
+                setTimeout(() => {
+                    printWindow.print();
+                    // printWindow.close(); // Décommentez pour fermer automatiquement après impression
+                }, 500);
+            };
+        }
+        
+        function fermerFacture() {
+            window.location.href = "{{ url_for('routes.ventes') }}";
+        }
+    </script>
+    {% endif %}
+</div>
+
+<!-- Modale pour la sélection des produits -->
+<div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="produitModalLabel">
+                    <i class="fas fa-boxes me-2"></i> Sélectionner un produit
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Champ de recherche dans la modale -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light">
+                            <i class="fas fa-search text-muted"></i>
+                        </span>
+                        <input type="text" id="searchProduitModal" class="form-control" placeholder="Rechercher un produit par nom...">
+                    </div>
+                </div>
+
+                <!-- Liste des produits dans la modale -->
+                <div id="produitListModal" class="list-group" style="max-height: 400px; overflow-y: auto;">
+                    {% for produit in produits %}
+                    <a href="#" class="list-group-item list-group-item-action produit-item" data-id="{{ produit.id }}" data-prix="{{ produit.prix }}" data-nom="{{ produit.nom }}" data-stock="{{ produit.quantite }}">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1 fw-semibold">{{ produit.nom }}</h6>
+                                <p class="mb-1 text-muted">Stock: {{ produit.quantite }}</p>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge {% if produit.quantite > 0 %}bg-success{% else %}bg-danger{% endif %} mb-1">
+                                    {{ produit.quantite }}
+                                </span>
+                                <div class="fw-bold text-primary">{{ "%.2f"|format(produit.prix) }} $</div>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Script pour la gestion de la page -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Éléments DOM
+        const searchProduitModal = document.getElementById('searchProduitModal');
+        const produitListModal = document.getElementById('produitListModal');
+        const produitIdInput = document.getElementById('produit_id');
+        const prixInput = document.getElementById('prix');
+        const quantiteInput = document.getElementById('quantite');
+        const nomProduitText = document.getElementById('nom-produit-text');
+        const stockProduitText = document.getElementById('stock-produit-text');
+        const prixProduitText = document.getElementById('prix-produit-text');
+        const produitSelectionneCard = document.getElementById('produit-selectionne-card');
+        const btnAjouterPanier = document.getElementById('btn-ajouter-panier');
+        const paiementComptant = document.getElementById('paiement_comptant');
+        const paiementCredit = document.getElementById('paiement_credit');
+        const montantCashGroup = document.getElementById('montant_cash_group');
+        const montantCashInput = document.getElementById('montant_cash');
+        const decrementBtn = document.getElementById('decrement-qte');
+        const incrementBtn = document.getElementById('increment-qte');
+        const btnViderPanier = document.getElementById('btn-vider-panier');
+
+        // Recherche dans la modale
+        searchProduitModal.addEventListener('input', function() {
+            const query = searchProduitModal.value.toLowerCase();
+            const produits = produitListModal.querySelectorAll('.produit-item');
+            produits.forEach(produit => {
+                const produitText = produit.textContent.toLowerCase();
+                if (produitText.includes(query)) {
+                    produit.style.display = 'block';
+                } else {
+                    produit.style.display = 'none';
+                }
+            });
+        });
+
+        // Sélection d'un produit dans la modale
+        produitListModal.addEventListener('click', function(event) {
+            const produitItem = event.target.closest('.produit-item');
+            if (produitItem) {
+                const produitId = produitItem.dataset.id;
+                const produitPrix = produitItem.dataset.prix;
+                const produitNom = produitItem.dataset.nom;
+                const produitStock = produitItem.dataset.stock;
+                
+                // Mettre à jour les champs du formulaire
+                produitIdInput.value = produitId;
+                prixInput.value = produitPrix;
+                
+                // Mettre à jour l'affichage du produit sélectionné
+                nomProduitText.textContent = produitNom;
+                stockProduitText.textContent = `Stock: ${produitStock}`;
+                prixProduitText.textContent = `${parseFloat(produitPrix).toFixed(2)} $`;
+                produitSelectionneCard.style.display = 'block';
+                
+                // Activer le bouton d'ajout au panier
+                btnAjouterPanier.disabled = false;
+                
+                // Fermer la modale
+                bootstrap.Modal.getInstance(document.getElementById('produitModal')).hide();
+            }
+        });
+
+        // Gestion des boutons de quantité
+        decrementBtn.addEventListener('click', function() {
+            let currentValue = parseInt(quantiteInput.value);
+            if (currentValue > 1) {
+                quantiteInput.value = currentValue - 1;
+            }
+        });
+
+        incrementBtn.addEventListener('click', function() {
+            let currentValue = parseInt(quantiteInput.value);
+            quantiteInput.value = currentValue + 1;
+        });
+
+        // Gestion de l'affichage du champ montant_cash
+        paiementComptant.addEventListener('change', function() {
+            if (this.checked) {
+                montantCashGroup.style.display = 'none';
+                montantCashInput.value = {{ total|tojson }};
+            }
+        });
+
+        paiementCredit.addEventListener('change', function() {
+            if (this.checked) {
+                montantCashGroup.style.display = 'block';
+                montantCashInput.value = {{ total|tojson }};
+            }
+        });
+
+        // Validation du formulaire de finalisation
+        document.getElementById('finaliserForm').addEventListener('submit', function(e) {
+            const paiementCreditChecked = document.getElementById('paiement_credit').checked;
+            const montantCash = parseFloat(montantCashInput.value) || 0;
+            const total = {{ total|tojson }};
+            
+            if (paiementCreditChecked) {
+                if (montantCash < 0) {
+                    alert('Le montant en cash ne peut pas être négatif');
+                    e.preventDefault();
+                    return false;
+                }
+                if (montantCash > total) {
+                    alert('Le montant en cash ne peut pas dépasser le total de ' + total.toFixed(2) + ' $');
+                    e.preventDefault();
+                    return false;
+                }
+                if (montantCash === 0 && total > 0) {
+                    if (!confirm('Le client ne paye rien maintenant. Voulez-vous vraiment créer une dette de ' + total.toFixed(2) + ' $ ?')) {
+                        e.preventDefault();
+                        return false;
+                    }
+                }
+            }
+        });
+
+        // Confirmation pour vider le panier
+        if (btnViderPanier) {
+            btnViderPanier.addEventListener('click', function(e) {
+                if (!confirm('Êtes-vous sûr de vouloir vider le panier ? Cette action est irréversible.')) {
+                    e.preventDefault();
+                }
+            });
+        }
+    });
+</script>
+
+<!-- Styles supplémentaires pour améliorer l'apparence -->
+<style>
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #2C3E50 0%, #3498DB 100%) !important;
+    }
+    
+    .card {
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 20px;
+    }
+    
+    .card-header {
+        border-bottom: none;
+    }
+    
+    .card-body {
+        padding: 20px;
+    }
+    
+    .table th, .table td {
+        padding: 12px;
+    }
+    
+    .btn {
+        border-radius: 6px;
+        transition: all 0.2s;
+        padding: 10px 15px;
+        font-size: 16px;
+    }
+    
+    .btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .form-control, .form-select {
+        border-radius: 6px;
+    }
+    
+    .input-group-text {
+        border-radius: 6px 0 0 6px;
+    }
+    
+    .list-group-item {
+        border-radius: 6px;
+        margin-bottom: 5px;
+        transition: all 0.2s;
+    }
+    
+    .list-group-item:hover {
+        transform: translateX(2px);
+    }
+    
+    .badge {
+        border-radius: 4px;
+    }
+    
+    /* Styles pour les tableaux améliorés */
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    
+    .table-bordered {
+        border: 1px solid #dee2e6;
+    }
+    
+    .table-bordered th,
+    .table-bordered td {
+        border: 1px solid #dee2e6;
+    }
+    
+    .table-success {
+        background-color: #d1e7dd;
+    }
+    
+    .table-warning {
+        background-color: #fff3cd;
+    }
+    
+    @media (max-width: 768px) {
+        .d-flex.justify-content-between.align-items-center.mt-4.mb-4 {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+        
+        .d-flex.align-items-center {
+            margin-top: 10px;
+        }
+        
+        .card-body {
+            padding: 1rem;
+        }
+        
+        .table-responsive {
+            font-size: 0.875rem;
+        }
+    }
+</style>
+{% endblock %}

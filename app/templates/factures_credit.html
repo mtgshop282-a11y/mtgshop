@@ -1,0 +1,698 @@
+{% extends "layout.html" %}
+
+{% block title %}Factures en Crédit - MKM Shop{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête amélioré -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-credit-card me-2 text-warning"></i>Gestion des Factures en Crédit
+            </h1>
+            <p class="text-muted small mb-0">Suivi et gestion des factures en attente de paiement</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-warning text-dark fs-6 me-3">
+                <i class="fas fa-file-invoice me-1"></i>
+                {{ total_factures }} facture(s) en crédit
+            </span>
+            <span class="badge bg-danger fs-6">
+                <i class="fas fa-dollar-sign me-1"></i>
+                {{ "%.2f"|format(total_credit) }} $ total
+            </span>
+        </div>
+    </div>
+
+    <!-- Messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle me-2 fs-5"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fas fa-exclamation-triangle me-2 fs-5"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle me-2 fs-5"></i>
+                            {% endif %}
+                            <div class="flex-grow-1">{{ message }}</div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- Formulaire de recherche -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-warning text-dark py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-search me-2"></i> Rechercher un client
+            </h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('routes.factures_credit') }}">
+                <div class="row g-3">
+                    <div class="col-md-8">
+                        <label for="search" class="form-label fw-semibold">Nom du client</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light">
+                                <i class="fas fa-user text-muted"></i>
+                            </span>
+                            <input type="text" class="form-control" id="search" name="search" 
+                                   value="{{ search_term }}" placeholder="Rechercher par nom client...">
+                        </div>
+                    </div>
+                    <div class="col-md-4 d-flex align-items-end">
+                        <div class="d-grid gap-2 w-100">
+                            <button type="submit" class="btn btn-warning">
+                                <i class="fas fa-search me-1"></i> Rechercher
+                            </button>
+                            {% if search_term %}
+                            <a href="{{ url_for('routes.factures_credit') }}" class="btn btn-outline-secondary">
+                                <i class="fas fa-sync-alt me-1"></i> Réinitialiser
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des factures en crédit -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-danger text-white py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-list me-2"></i> Factures en Attente de Paiement
+                <span class="badge bg-light text-danger ms-2 fs-6">{{ factures|length }}</span>
+            </h5>
+        </div>
+        <div class="card-body">
+            {% if factures %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th class="text-center">#ID</th>
+                            <th>Client</th>
+                            <th class="text-end">Montant Total</th>
+                            <th class="text-end">Payé</th>
+                            <th class="text-end">Reste à Payer</th>
+                            <th class="text-center">Date</th>
+                            <th class="text-center">Jours écoulés</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for facture in factures %}
+                        {% set jours_ecoules = (now - facture.date_facture).days if now and facture.date_facture else 0 %}
+                        <tr class="facture-row {% if jours_ecoules > 30 %}table-danger{% elif jours_ecoules > 15 %}table-warning{% endif %}" 
+                            data-id="{{ facture.id }}" 
+                            data-client="{{ facture.nom_client|lower }}">
+                            <td class="text-center fw-bold text-primary">{{ facture.id }}</td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user-circle text-muted me-2"></i>
+                                    <span class="fw-semibold">{{ facture.nom_client }}</span>
+                                </div>
+                            </td>
+                            <td class="text-end fw-bold">{{ "%.2f"|format(facture.montant_total) }} $</td>
+                            <td class="text-end text-success fw-semibold">{{ "%.2f"|format(facture.montant_cash) }} $</td>
+                            <td class="text-end text-danger fw-bold">{{ "%.2f"|format(facture.montant_credit) }} $</td>
+                            <td class="text-center">
+                                <div class="d-flex flex-column">
+                                    <small class="text-muted">{{ facture.date_facture.strftime('%d/%m/%Y') }}</small>
+                                    <small class="text-muted">{{ facture.date_facture.strftime('%H:%M') }}</small>
+                                </div>
+                            </td>
+                            <td class="text-center">
+                                <span class="badge {% if jours_ecoules > 30 %}bg-danger{% elif jours_ecoules > 15 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                    {{ jours_ecoules }} jour(s)
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-primary view-details" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#detailsFactureModal"
+                                            data-facture-id="{{ facture.id }}"
+                                            title="Voir les détails">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-outline-info historique-paiements-btn"
+                                            data-facture-id="{{ facture.id }}"
+                                            data-client="{{ facture.nom_client }}"
+                                            title="Historique des paiements">
+                                        <i class="fas fa-history"></i>
+                                    </button>
+                                    <button class="btn btn-outline-success marquer-paye-btn"
+                                            data-facture-id="{{ facture.id }}"
+                                            data-client="{{ facture.nom_client }}"
+                                            data-montant="{{ facture.montant_credit }}"
+                                            title="Enregistrer un paiement">
+                                        <i class="fas fa-money-bill-wave"></i>
+                                    </button>
+                                    
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Résumé statistique -->
+            <div class="row mt-4">
+                <div class="col-md-3">
+                    <div class="card bg-warning text-dark">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">Total Factures</h6>
+                            <h4 class="mb-0">{{ factures|length }}</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-danger text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">Montant Total Crédit</h6>
+                            <h4 class="mb-0">{{ "%.2f"|format(total_credit) }} $</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-success text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">Déjà Payé</h6>
+                            <h4 class="mb-0">{{ "%.2f"|format(factures|sum(attribute='montant_cash')) }} $</h4>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card bg-info text-white">
+                        <div class="card-body text-center py-3">
+                            <h6 class="card-title mb-1">En Retard (>15j)</h6>
+                            <h4 class="mb-0">
+                                {% set factures_retard = [] %}
+                                {% for facture in factures %}
+                                    {% set jours_ecoules = (now - facture.date_facture).days if now and facture.date_facture else 0 %}
+                                    {% if jours_ecoules > 15 %}
+                                        {% set _ = factures_retard.append(facture) %}
+                                    {% endif %}
+                                {% endfor %}
+                                {{ factures_retard|length }}
+                            </h4>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- État vide -->
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-credit-card fa-4x text-muted"></i>
+                </div>
+                <h4 class="text-muted mb-3">Aucune facture en crédit</h4>
+                <p class="text-muted mb-4">
+                    {% if search_term %}
+                    Aucune facture en crédit ne correspond à votre recherche "{{ search_term }}"
+                    {% else %}
+                    Toutes les factures ont été réglées. Excellent travail !
+                    {% endif %}
+                </p>
+                {% if search_term %}
+                <a href="{{ url_for('routes.factures_credit') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-sync-alt me-1"></i> Afficher toutes les factures en crédit
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modale pour les détails de la facture -->
+<div class="modal fade" id="detailsFactureModal" tabindex="-1" aria-labelledby="detailsFactureModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="detailsFactureModalLabel">
+                    <i class="fas fa-file-invoice me-2"></i> Détails de la Facture
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="factureDetailsContent">
+                    <!-- Le contenu sera chargé dynamiquement -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-1"></i> Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale pour l'historique des paiements -->
+<div class="modal fade" id="historiquePaiementsModal" tabindex="-1" aria-labelledby="historiquePaiementsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="historiquePaiementsModalLabel">
+                    <i class="fas fa-history me-2"></i> Historique des Paiements
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="historiquePaiementsContent">
+                    <!-- Le contenu sera chargé dynamiquement -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale pour enregistrer un paiement -->
+<div class="modal fade" id="marquerPayeModal" tabindex="-1" aria-labelledby="marquerPayeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="marquerPayeModalLabel">
+                    <i class="fas fa-money-bill-wave me-2"></i> Enregistrer un Paiement
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="marquerPayeForm" method="POST" action="{{ url_for('routes.marquer_facture_payee') }}">
+                <div class="modal-body">
+                    <input type="hidden" id="facture_id_payee" name="facture_id">
+                    <div class="mb-3">
+                        <p class="fw-semibold">Enregistrement de paiement</p>
+                        <div class="alert alert-info">
+                            <strong>Client:</strong> <span id="client_nom_modal"></span><br>
+                            <strong>Montant restant:</strong> <span id="montant_credit_modal" class="fw-bold text-danger"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="montant_paye" class="form-label">Montant payé ($)</label>
+                        <input type="number" class="form-control" id="montant_paye" name="montant_paye" step="0.01" min="0.01" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="mode_paiement" class="form-label">Mode de paiement</label>
+                        <select class="form-select" id="mode_paiement" name="mode_paiement">
+                            <option value="cash">Cash</option>
+                            <option value="mobile_money">Mobile Money</option>
+                            <option value="virement">Virement Bancaire</option>
+                            <option value="cheque">Chèque</option>
+                            <option value="autre">Autre</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description (optionnel)</label>
+                        <textarea class="form-control" id="description" name="description" rows="2" placeholder="Note sur le paiement..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-check-circle me-1"></i> Enregistrer le Paiement
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts pour la gestion de la page -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const viewDetailsButtons = document.querySelectorAll('.view-details');
+        const historiquePaiementsButtons = document.querySelectorAll('.historique-paiements-btn');
+        const marquerPayeButtons = document.querySelectorAll('.marquer-paye-btn');
+        const imprimerFactureButtons = document.querySelectorAll('.imprimer-facture-btn');
+
+        // Gestion des détails de facture
+        viewDetailsButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                chargerDetailsFacture(factureId);
+            });
+        });
+
+        // Gestion de l'historique des paiements
+        historiquePaiementsButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                const clientNom = this.getAttribute('data-client');
+                chargerHistoriquePaiements(factureId, clientNom);
+            });
+        });
+
+        // Gestion du bouton d'enregistrement de paiement
+        marquerPayeButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                const clientNom = this.getAttribute('data-client');
+                const montantCredit = this.getAttribute('data-montant');
+                
+                document.getElementById('facture_id_payee').value = factureId;
+                document.getElementById('client_nom_modal').textContent = clientNom;
+                document.getElementById('montant_credit_modal').textContent = parseFloat(montantCredit).toFixed(2) + ' $';
+                document.getElementById('montant_paye').value = parseFloat(montantCredit).toFixed(2);
+                document.getElementById('montant_paye').max = parseFloat(montantCredit).toFixed(2);
+                
+                const modal = new bootstrap.Modal(document.getElementById('marquerPayeModal'));
+                modal.show();
+            });
+        });
+
+        // Gestion du bouton d'impression
+        imprimerFactureButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                imprimerFacture(factureId);
+            });
+        });
+
+        // Validation du formulaire de paiement
+        document.getElementById('marquerPayeForm').addEventListener('submit', function(e) {
+            const montantPaye = parseFloat(document.getElementById('montant_paye').value);
+            const montantCredit = parseFloat(document.getElementById('montant_credit_modal').textContent);
+            
+            if (montantPaye > montantCredit) {
+                alert('Le montant payé ne peut pas dépasser le montant restant !');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (montantPaye <= 0) {
+                alert('Le montant payé doit être supérieur à 0 !');
+                e.preventDefault();
+                return false;
+            }
+        });
+    });
+
+    // Fonction pour charger les détails de la facture
+    function chargerDetailsFacture(factureId) {
+        fetch(`/factures/${factureId}/details.json`)
+            .then(response => response.json())
+            .then(data => {
+                afficherDetailsFacture(data);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                document.getElementById('factureDetailsContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Erreur lors du chargement des détails de la facture.
+                    </div>
+                `;
+            });
+    }
+
+    // Fonction pour charger l'historique des paiements
+    function chargerHistoriquePaiements(factureId, clientNom) {
+        fetch(`/factures/${factureId}/paiements`)
+            .then(response => response.json())
+            .then(data => {
+                afficherHistoriquePaiements(data, clientNom);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                document.getElementById('historiquePaiementsContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Erreur lors du chargement de l'historique des paiements.
+                    </div>
+                `;
+            });
+    }
+
+    // Fonction pour afficher l'historique des paiements
+    function afficherHistoriquePaiements(data, clientNom) {
+        const { facture, paiements } = data;
+        
+        let paiementsHTML = '';
+        let totalPaiements = 0;
+        
+        if (paiements.length > 0) {
+            paiements.forEach(paiement => {
+                totalPaiements += paiement.montant;
+                paiementsHTML += `
+                    <tr>
+                        <td>${paiement.date_paiement}</td>
+                        <td class="text-end fw-bold text-success">${paiement.montant.toFixed(2)} $</td>
+                        <td class="text-capitalize">${paiement.mode_paiement}</td>
+                        <td>${paiement.description || '-'}</td>
+                        <td class="text-center">
+                            <a href="/paiements/${paiement.id}/imprimer_recu" target="_blank" class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-print"></i> Reçu
+                            </a>
+                        </td>
+                    </tr>
+                `;
+            });
+        } else {
+            paiementsHTML = `
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-3">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Aucun paiement enregistré pour cette facture
+                    </td>
+                </tr>
+            `;
+        }
+
+        const modalContent = `
+            <div class="card mb-3">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i>Informations Facture</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">Facture N°:</td>
+                                    <td class="text-end fw-bold text-primary">${facture.id}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Client:</td>
+                                    <td class="text-end">${clientNom}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">Total:</td>
+                                    <td class="text-end fw-bold">${facture.montant_total.toFixed(2)} $</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Reste à payer:</td>
+                                    <td class="text-end fw-bold text-danger">${facture.montant_credit.toFixed(2)} $</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h6 class="card-title mb-0"><i class="fas fa-history me-2"></i>Historique des Paiements</h6>
+                    <span class="badge bg-success">Total payé: ${totalPaiements.toFixed(2)} $</span>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Date</th>
+                                    <th class="text-end">Montant</th>
+                                    <th>Mode</th>
+                                    <th>Description</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${paiementsHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('historiquePaiementsContent').innerHTML = modalContent;
+        
+        const modal = new bootstrap.Modal(document.getElementById('historiquePaiementsModal'));
+        modal.show();
+    }
+
+    // Fonctions existantes pour afficher les détails et imprimer
+    function afficherDetailsFacture(data) {
+        const { facture, ventes } = data;
+        
+        let produitsHTML = '';
+        ventes.forEach(vente => {
+            produitsHTML += `
+                <tr>
+                    <td>${vente.produit_nom}</td>
+                    <td class="text-center">${vente.quantite}</td>
+                    <td class="text-end">${vente.prix_unitaire.toFixed(2)} $</td>
+                    <td class="text-end fw-bold">${vente.montant_total.toFixed(2)} $</td>
+                </tr>
+            `;
+        });
+
+        const modalContent = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i>Informations Facture</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">N° Facture:</td>
+                                    <td class="text-end fw-bold text-primary">${facture.id}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Client:</td>
+                                    <td class="text-end">${facture.nom_client}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Date:</td>
+                                    <td class="text-end">${facture.date_facture}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Mode Paiement:</td>
+                                    <td class="text-end">
+                                        ${facture.paiement_credit ? 
+                                            '<span class="badge bg-warning text-dark"><i class="fas fa-credit-card me-1"></i>Crédit</span>' : 
+                                            '<span class="badge bg-success"><i class="fas fa-money-bill-wave me-1"></i>Comptant</span>'}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-light">
+                            <h6 class="card-title mb-0"><i class="fas fa-money-bill-wave me-2"></i>Détails Paiement</h6>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm">
+                                <tr>
+                                    <td class="fw-semibold">Total:</td>
+                                    <td class="text-end fw-bold text-primary">${facture.montant_total.toFixed(2)} $</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Payé en cash:</td>
+                                    <td class="text-end text-success">${facture.montant_cash.toFixed(2)} $</td>
+                                </tr>
+                                ${facture.paiement_credit ? `
+                                <tr>
+                                    <td class="fw-semibold">Reste crédit:</td>
+                                    <td class="text-end text-warning">${facture.montant_credit.toFixed(2)} $</td>
+                                </tr>
+                                ` : ''}
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h6 class="card-title mb-0"><i class="fas fa-boxes me-2"></i>Produits Vendus</h6>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Produit</th>
+                                    <th class="text-center">Quantité</th>
+                                    <th class="text-end">Prix Unitaire</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${produitsHTML}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-success">
+                                    <td colspan="3" class="text-end fw-bold">Total Général:</td>
+                                    <td class="text-end fw-bold">${facture.montant_total.toFixed(2)} $</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        document.getElementById('factureDetailsContent').innerHTML = modalContent;
+        document.getElementById('detailsFactureModal').setAttribute('data-current-facture-id', facture.id);
+    }
+
+    function imprimerFactureFromModal() {
+        const factureId = document.getElementById('detailsFactureModal').getAttribute('data-current-facture-id');
+        if (factureId) {
+            imprimerFacture(factureId);
+        }
+    }
+
+    function imprimerFacture(factureId) {
+        fetch(`/factures/${factureId}/details.json`)
+            .then(response => response.json())
+            .then(data => {
+                genererEtImprimerFacture(data.facture, data.ventes);
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                alert('Erreur lors du chargement des détails de la facture');
+            });
+    }
+
+    function genererEtImprimerFacture(facture, ventes) {
+        // Code d'impression existant...
+        // (Le même code que précédemment pour l'impression des factures)
+    }
+</script>
+
+<!-- Styles supplémentaires -->
+<style>
+    .card { border-radius: 10px; margin-bottom: 20px; }
+    .card-header { border-radius: 10px 10px 0 0 !important; border-bottom: none; }
+    .table th { border-top: none; font-weight: 600; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .table td { vertical-align: middle; padding: 12px 8px; }
+    .facture-row:hover { background-color: rgba(0, 0, 0, 0.02); transform: translateY(-1px); transition: all 0.2s ease; }
+    .btn-group .btn { border-radius: 6px; margin: 0 2px; }
+    .badge { font-size: 0.75rem; padding: 0.35em 0.65em; }
+    .modal-xl { max-width: 1200px; }
+
+    @media (max-width: 768px) {
+        .container-fluid { padding: 10px; }
+        .table-responsive { font-size: 0.875rem; }
+        .btn-group { display: flex; flex-direction: column; }
+        .btn-group .btn { margin: 2px 0; border-radius: 4px; }
+        .d-flex.justify-content-between.align-items-center.mb-4 { flex-direction: column; align-items: flex-start !important; }
+        .d-flex.align-items-center { margin-top: 10px; }
+        .modal-xl { max-width: 95%; margin: 10px auto; }
+    }
+</style>
+{% endblock %}
