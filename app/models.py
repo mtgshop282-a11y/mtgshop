@@ -65,6 +65,7 @@ class Factures(db.Model):
     paiement_credit = db.Column(db.Boolean, default=False)
     montant_cash = db.Column(db.Float, default=0)
     montant_credit = db.Column(db.Float, default=0)
+    a_ete_en_credit = db.Column(db.Boolean, default=False)
 
     ventes = db.relationship('Ventes', backref='facture', lazy=True)
 

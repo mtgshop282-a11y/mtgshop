@@ -28,18 +28,23 @@ def permission_required(permission):
     return decorator
 
 # Context processor
+# Modifiez le context processor pour qu'il compte les factures avec du crédit
 @bp.context_processor
 def inject_common_variables():
     common_vars = {'factures_credit_count': 0}
+    
     try:
         if current_user.is_authenticated and hasattr(current_user, 'has_permission'):
             if current_user.has_permission('voir_historique_vente'):
-                common_vars['factures_credit_count'] = Factures.query.filter_by(paiement_credit=True).count()
+                # Compter uniquement les factures avec du crédit à payer
+                common_vars['factures_credit_count'] = Factures.query.filter(
+                    Factures.montant_credit > 0
+                ).count()
     except Exception as e:
         print(f"Error in context processor: {e}")
         common_vars['factures_credit_count'] = 0
+        
     return common_vars
-
 # ==================== ROUTES D'AUTHENTIFICATION ====================
 
 @bp.route('/')
@@ -269,17 +274,19 @@ def ventes():
                     flash("Quantité insuffisante en stock!", "danger")
                     return redirect(url_for('routes.ventes'))
 
-                if Panier.query.filter_by(produit_id=produit_id, session_id=session_id).first():
-                    flash("Ce produit est déjà dans le panier.", "warning")
+                item_panier = Panier.query.filter_by(produit_id=produit_id, session_id=session_id).first()
+                if item_panier:
+                    flash("Ce produit est déjà dans le panier. Supprimez-le avant de l'ajouter à nouveau.", "warning")
                     return redirect(url_for('routes.ventes'))
+                else:
+                    nouveau_panier = Panier(
+                        produit_id=produit_id,
+                        quantite=quantite,
+                        prix=prix,
+                        session_id=session_id
+                    )
+                    db.session.add(nouveau_panier)
 
-                nouveau_panier = Panier(
-                    produit_id=produit_id,
-                    quantite=quantite,
-                    prix=prix,
-                    session_id=session_id
-                )
-                db.session.add(nouveau_panier)
                 db.session.commit()
                 flash("Produit ajouté au panier avec succès!", "success")
                 return redirect(url_for('routes.ventes'))
@@ -314,21 +321,29 @@ def ventes():
 
         elif 'finaliser_vente' in request.form:
             try:
-                nom_client = request.form['nom_client'].strip()
+                nom_client = request.form['nom_client']
                 paiement_type = request.form.get('paiement_type', 'comptant')
                 montant_cash = float(request.form.get('montant_cash', 0))
 
-                if not nom_client:
+                if not nom_client.strip():
                     flash("Le nom du client ne peut pas être vide.", "danger")
                     return redirect(url_for('routes.ventes'))
 
                 panier = Panier.query.filter_by(session_id=session_id).all()
+
                 if not panier:
                     flash("Votre panier est vide!", "danger")
                     return redirect(url_for('routes.ventes'))
 
                 montant_total = sum(item.prix * item.quantite for item in panier)
+                
+                # Détection du type de paiement
                 paiement_credit = (paiement_type == 'credit')
+                
+                # IMPORTANT : On initialise toujours a_ete_en_credit = paiement_credit
+                # Ce champ servira à garder l'historique même après paiement complet
+                a_ete_en_credit = paiement_credit
+                
                 montant_credit = 0
 
                 if paiement_credit:
@@ -337,48 +352,87 @@ def ventes():
                         return redirect(url_for('routes.ventes'))
                     montant_credit = montant_total - montant_cash
                 else:
+                    # Pour le comptant, tout est payé en cash
                     montant_cash = montant_total
 
+                # Créer la facture
                 nouvelle_facture = Factures(
                     nom_client=nom_client,
                     montant_total=montant_total,
                     paiement_credit=paiement_credit,
+                    a_ete_en_credit=a_ete_en_credit,  # ← IMPORTANT : Sauvegarde pour historique
                     montant_cash=montant_cash,
                     montant_credit=montant_credit
                 )
                 db.session.add(nouvelle_facture)
-                db.session.flush()
+                db.session.flush()  # Pour obtenir l'ID de la facture
 
+                # Créer les ventes et mettre à jour les stocks
                 for item in panier:
                     produit = Produits.query.get_or_404(item.produit_id)
                     
+                    # Vérifier à nouveau le stock avant de finaliser
                     if produit.quantite < item.quantite:
                         flash(f"Stock insuffisant pour {produit.nom}!", "danger")
                         db.session.rollback()
                         return redirect(url_for('routes.ventes'))
                     
+                    # Calculer le prix unitaire réel
+                    prix_unitaire = item.prix
+                    
+                    # Créer la vente
                     nouvelle_vente = Ventes(
                         produit_id=item.produit_id,
                         facture_id=nouvelle_facture.id,
                         quantite=item.quantite,
-                        montant_total=item.prix * item.quantite
+                        montant_total=prix_unitaire * item.quantite
                     )
                     db.session.add(nouvelle_vente)
+                    
+                    # Mettre à jour le stock
                     produit.quantite -= item.quantite
+                    
+                    # Enregistrer la transaction de sortie
+                    transaction = TransactionsProduit(
+                        produit_id=item.produit_id,
+                        type='sortie',
+                        quantite=item.quantite,
+                        description=f"Vente facture #{nouvelle_facture.id} à {nom_client}"
+                    )
+                    db.session.add(transaction)
 
+                # Enregistrer le premier paiement si c'est un crédit avec paiement initial
+                if paiement_credit and montant_cash > 0:
+                    premier_paiement = Paiements(
+                        facture_id=nouvelle_facture.id,
+                        montant=montant_cash,
+                        mode_paiement='cash',
+                        description=f"Paiement initial pour facture crédit #{nouvelle_facture.id}"
+                    )
+                    db.session.add(premier_paiement)
+
+                # Vider le panier après la vente
                 Panier.query.filter_by(session_id=session_id).delete()
+                
                 db.session.commit()
                 
+                # Récupérer la facture et les ventes pour l'affichage
                 facture = nouvelle_facture
-                ventes = Ventes.query.filter_by(facture_id=facture.id).all()
-                flash("Vente finalisée avec succès!", "success")
+                ventes_facture = Ventes.query.filter_by(facture_id=facture.id).all()
                 
+                # Message de succès différent selon le type de paiement
+                if paiement_credit:
+                    flash(f"Vente crédit #{facture.id} enregistrée avec succès! Montant crédit: {montant_credit:.2f} $", "success")
+                else:
+                    flash(f"Vente comptant #{facture.id} enregistrée avec succès!", "success")
+                
+                # Récupérer les produits et le panier (maintenant vide) pour l'affichage
                 produits = Produits.query.order_by(Produits.nom.asc()).all()
                 panier = []
                 total = 0
                 
                 return render_template('ventes.html', produits=produits, panier=panier, total=total, 
-                                    facture=facture, ventes=ventes, montant_cash=montant_cash, 
+                                    facture=facture, ventes=ventes_facture, montant_cash=montant_cash, 
                                     montant_credit=montant_credit)
 
             except Exception as e:
@@ -386,13 +440,13 @@ def ventes():
                 flash(f"Erreur lors de la finalisation de la vente: {e}", "danger")
                 return redirect(url_for('routes.ventes'))
 
+    # Récupérer les produits et le panier pour l'affichage
     produits = Produits.query.order_by(Produits.nom.asc()).all()
     panier = Panier.query.filter_by(session_id=session_id).all()
     total = sum(item.prix * item.quantite for item in panier)
 
     return render_template('ventes.html', produits=produits, panier=panier, total=total, 
                           facture=None, ventes=[], montant_cash=0, montant_credit=0)
-
 # ==================== ROUTES DE FACTURES ====================
 
 @bp.route('/factures', methods=['GET'])
@@ -620,14 +674,19 @@ def modifier_articles_facture(id):
 def factures_credit():
     search_term = request.args.get('search', '')
     
+    # IMPORTANT : Récupérer TOUTES les factures qui ont été en crédit
+    # On utilise a_ete_en_credit au lieu de paiement_credit
     if search_term:
         factures = Factures.query.filter(
-            Factures.paiement_credit == True,
+            Factures.a_ete_en_credit == True,  # ← CECI EST LA CLÉ
             Factures.nom_client.ilike(f'%{search_term}%')
         ).order_by(Factures.date_facture.desc()).all()
     else:
-        factures = Factures.query.filter_by(paiement_credit=True).order_by(Factures.date_facture.desc()).all()
+        factures = Factures.query.filter_by(
+            a_ete_en_credit=True  # ← CECI EST LA CLÉ
+        ).order_by(Factures.date_facture.desc()).all()
     
+    # Calculer les totaux
     total_credit = sum(facture.montant_credit for facture in factures)
     total_factures = len(factures)
     
@@ -635,7 +694,8 @@ def factures_credit():
                          factures=factures, 
                          search_term=search_term,
                          total_credit=total_credit,
-                         total_factures=total_factures)
+                         total_factures=total_factures,
+                         now=datetime.now())
 
 @bp.route('/marquer_facture_payee', methods=['POST'])
 @login_required
@@ -649,8 +709,9 @@ def marquer_facture_payee():
         
         facture = Factures.query.get_or_404(facture_id)
         
-        if not facture.paiement_credit:
-            flash("Cette facture n'est pas en crédit!", "danger")
+        # Vérifier si la facture a été en crédit
+        if not facture.a_ete_en_credit:
+            flash("Cette facture n'a pas été en crédit!", "danger")
             return redirect(url_for('routes.factures_credit'))
         
         if montant_paye > facture.montant_credit:
@@ -661,6 +722,7 @@ def marquer_facture_payee():
             flash("Le montant payé doit être supérieur à 0!", "danger")
             return redirect(url_for('routes.factures_credit'))
         
+        # Enregistrer le paiement dans l'historique
         nouveau_paiement = Paiements(
             facture_id=facture_id,
             montant=montant_paye,
@@ -669,13 +731,18 @@ def marquer_facture_payee():
         )
         db.session.add(nouveau_paiement)
         
+        # Mettre à jour les montants de la facture
         facture.montant_cash += montant_paye
         facture.montant_credit -= montant_paye
         
+        # IMPORTANT : NE PAS changer a_ete_en_credit
+        # La facture reste dans l'historique des crédits
+        
+        # Si le crédit est entièrement payé, on peut changer paiement_credit
         if facture.montant_credit <= 0:
-            facture.paiement_credit = False
             facture.montant_credit = 0
-            flash(f"Facture #{facture_id} marquée comme complètement payée!", "success")
+            facture.paiement_credit = False  # Marquer comme non crédit actif
+            flash(f"Facture #{facture_id} complètement payée! (reste visible pour historique)", "success")
         else:
             flash(f"Paiement partiel enregistré pour la facture #{facture_id}. Reste: {facture.montant_credit:.2f} $", "warning")
         
@@ -686,7 +753,6 @@ def marquer_facture_payee():
         flash(f"Erreur lors de l'enregistrement du paiement: {e}", "danger")
     
     return redirect(url_for('routes.factures_credit'))
-
 @bp.route('/factures/<int:facture_id>/paiements')
 @login_required
 @permission_required('gestion_ventes')

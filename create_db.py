@@ -1,6 +1,6 @@
 import os
 from app import create_app, db, bcrypt
-from app.models import User, Produits, TransactionsProduit, Factures, Ventes, Benefices, Panier, Depenses, TransactionDepot, Caisse, CompteBancaire, ProduitsEnRoute
+from app.models import User
 
 def init_db():
     app = create_app()
