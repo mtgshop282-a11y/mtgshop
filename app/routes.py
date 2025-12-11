@@ -1,19 +1,14 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, current_app,jsonify,send_file
-import shutil
-import os
-import zipfile
-import subprocess
-from datetime import datetime
-
-from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute,Paiements
-from datetime import datetime,timedelta
+from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, current_app, jsonify, send_file
+import os, shutil, zipfile, io, sqlite3
+from datetime import datetime, timedelta
 import uuid
 from werkzeug.utils import secure_filename
 from flask_login import login_user, logout_user, login_required, current_user
 from . import login_manager
 from PIL import Image
 from functools import wraps
-
+from sqlalchemy import func
+from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute,Paiements
 # Création du Blueprint
 bp = Blueprint('routes', __name__)
 
@@ -27,13 +22,13 @@ def permission_required(permission):
         def decorated_function(*args, **kwargs):
             if not current_user.has_permission(permission):
                 flash("Accès refusé. Vous n'avez pas les permissions nécessaires.", 'danger')
-                return redirect(url_for('routes.index'))  # Rediriger vers la page d'accueil
+                return redirect(url_for('routes.index'))
             return f(*args, **kwargs)
         return decorated_function
     return decorator
 
-# Ajoutez ce code APRÈS la création du blueprint (bp = Blueprint('routes', __name__))
-
+# Context processor
+# Modifiez le context processor pour qu'il compte les factures avec du crédit
 @bp.context_processor
 def inject_common_variables():
     common_vars = {'factures_credit_count': 0}
@@ -41,24 +36,85 @@ def inject_common_variables():
     try:
         if current_user.is_authenticated and hasattr(current_user, 'has_permission'):
             if current_user.has_permission('voir_historique_vente'):
-                common_vars['factures_credit_count'] = Factures.query.filter_by(paiement_credit=True).count()
+                # Compter uniquement les factures avec du crédit à payer
+                common_vars['factures_credit_count'] = Factures.query.filter(
+                    Factures.montant_credit > 0
+                ).count()
     except Exception as e:
         print(f"Error in context processor: {e}")
         common_vars['factures_credit_count'] = 0
         
     return common_vars
+# ==================== ROUTES D'AUTHENTIFICATION ====================
 
-# Route pour la page d'accueil
 @bp.route('/')
 @login_required
 def index():
-    # Afficher la page d'accueil avec les statistiques
-    
     total_produits = Produits.query.count()
     transactions = TransactionsProduit.query.order_by(TransactionsProduit.date_transaction.desc()).limit(5).all()
-    return render_template('index.html', total_produits=total_produits,  transactions=transactions)
+    return render_template('index.html', total_produits=total_produits, transactions=transactions)
 
-# Route pour gérer les produits
+@bp.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email = request.form.get('email')
+        password = request.form.get('password')
+        user = User.query.filter_by(email=email).first()
+
+        if user and bcrypt.check_password_hash(user.password, password):
+            login_user(user)
+            flash('Connexion réussie!', 'success')
+            return redirect(url_for('routes.index'))
+        else:
+            flash('Email ou mot de passe incorrect.', 'danger')
+    return render_template('login.html')
+
+@bp.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("Vous avez été déconnecté avec succès.", 'success')
+    return redirect(url_for('routes.login'))
+
+@bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    if request.method == 'POST':
+        try:
+            current_user.firstname = request.form['firstname']
+            current_user.lastname = request.form['lastname']
+            current_user.email = request.form['email']
+            
+            if request.form['password']:
+                current_user.set_password(request.form['password'])
+            
+            photo = request.files['photo']
+            if photo and photo.filename != '':
+                if current_user.photo:
+                    old_photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], current_user.photo.split('/')[-1])
+                    if os.path.exists(old_photo_path):
+                        os.remove(old_photo_path)
+                
+                filename = secure_filename(photo.filename)
+                unique_filename = f"{uuid.uuid4().hex}_{filename}"
+                photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
+                photo.save(photo_path)
+                current_user.photo = f"uploads/{unique_filename}"
+            
+            db.session.commit()
+            flash("Profil mis à jour avec succès !", 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erreur lors de la mise à jour du profil : {str(e)}", 'danger')
+    return render_template('profile.html', user=current_user)
+
+@bp.route('/parametres')
+@login_required
+def parametres():
+    return render_template('parametres.html')
+
+# ==================== ROUTES DE GESTION DES PRODUITS ====================
+
 @bp.route('/gestion_produits')
 @login_required
 @permission_required('gestion_produits')
@@ -66,7 +122,6 @@ def gestion_produits():
     produits = Produits.query.all()
     return render_template('gestion_produits.html', produits=produits)
 
-# Route pour ajouter un produit
 @bp.route('/ajouter_produit', methods=['POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -77,8 +132,7 @@ def ajouter_produit():
         prix = float(request.form['prix'])
         prix_achat = float(request.form['prix_achat'])
 
-        produit_existant = Produits.query.filter_by(nom=nom).first()
-        if produit_existant:
+        if Produits.query.filter_by(nom=nom).first():
             flash("Le produit existe déjà!", "danger")
             return redirect(url_for('routes.gestion_produits'))
 
@@ -97,7 +151,6 @@ def ajouter_produit():
         flash(f"Erreur lors de l'ajout du produit: {e}", "danger")
     return redirect(url_for('routes.gestion_produits'))
 
-# Route pour modifier un produit
 @bp.route('/modifier_produit/<int:id>', methods=['POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -115,7 +168,6 @@ def modifier_produit(id):
         flash(f"Erreur lors de la modification du produit: {e}", "danger")
     return redirect(url_for('routes.gestion_produits'))
 
-# Route pour supprimer un produit
 @bp.route('/supprimer_produit', methods=['POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -131,7 +183,22 @@ def supprimer_produit():
         flash(f"Erreur lors de la suppression du produit: {e}", "danger")
     return redirect(url_for('routes.gestion_produits'))
 
-# Route pour afficher les entrées et sorties des produits
+@bp.route('/search_produits')
+def search_produits():
+    query = request.args.get('q', '').strip()
+    if query:
+        produits = Produits.query.filter(Produits.nom.ilike(f'%{query}%')).all()
+        produits_data = [{
+            'id': produit.id,
+            'nom': produit.nom,
+            'quantite': produit.quantite,
+            'prix': produit.prix
+        } for produit in produits]
+        return jsonify(produits_data)
+    return jsonify([])
+
+# ==================== ROUTES DE TRANSACTIONS STOCK ====================
+
 @bp.route('/entrees_sorties')
 @login_required
 @permission_required('gestion_produits')
@@ -140,7 +207,6 @@ def entrees_sorties():
     produits = Produits.query.all()
     return render_template('entrees_sorties.html', transactions=transactions, produits=produits)
 
-# Route pour ajouter une transaction (entrée ou sortie)
 @bp.route('/ajouter_transaction', methods=['POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -178,26 +244,7 @@ def ajouter_transaction():
         flash(f"Erreur lors de l'ajout de la transaction: {e}", "danger")
     return redirect(url_for('routes.entrees_sorties'))
 
-# Route pour afficher et rechercher les factures
-@bp.route('/factures', methods=['GET'])
-@login_required
-@permission_required('gestion_ventes')
-def factures():
-    search_term = request.args.get('search', '')
-    if search_term:
-        factures = Factures.query.filter(Factures.nom_client.ilike(f'%{search_term}%')).order_by(Factures.date_facture.desc()).all()
-    else:
-        factures = Factures.query.order_by(Factures.date_facture.desc()).all()
-    return render_template('factures.html', factures=factures, search_term=search_term)
-
-# Route pour afficher les détails d'une facture
-@bp.route('/factures/<int:id>', methods=['GET'])
-@login_required
-@permission_required('gestion_ventes')
-def details_facture(id):
-    facture = Factures.query.get_or_404(id)
-    ventes = Ventes.query.filter_by(facture_id=id).all()
-    return render_template('details_facture.html', facture=facture, ventes=ventes)
+# ==================== ROUTES DE VENTES ====================
 
 @bp.route('/ventes', methods=['GET', 'POST'])
 @login_required
@@ -275,7 +322,6 @@ def ventes():
         elif 'finaliser_vente' in request.form:
             try:
                 nom_client = request.form['nom_client']
-                # ✅ CORRECTION : Utiliser le bon nom de champ
                 paiement_type = request.form.get('paiement_type', 'comptant')
                 montant_cash = float(request.form.get('montant_cash', 0))
 
@@ -291,8 +337,13 @@ def ventes():
 
                 montant_total = sum(item.prix * item.quantite for item in panier)
                 
-                # ✅ CORRECTION : Détection correcte du type de paiement
+                # Détection du type de paiement
                 paiement_credit = (paiement_type == 'credit')
+                
+                # IMPORTANT : On initialise toujours a_ete_en_credit = paiement_credit
+                # Ce champ servira à garder l'historique même après paiement complet
+                a_ete_en_credit = paiement_credit
+                
                 montant_credit = 0
 
                 if paiement_credit:
@@ -308,7 +359,8 @@ def ventes():
                 nouvelle_facture = Factures(
                     nom_client=nom_client,
                     montant_total=montant_total,
-                    paiement_credit=paiement_credit,  # ✅ Boolean correct
+                    paiement_credit=paiement_credit,
+                    a_ete_en_credit=a_ete_en_credit,  # ← IMPORTANT : Sauvegarde pour historique
                     montant_cash=montant_cash,
                     montant_credit=montant_credit
                 )
@@ -325,17 +377,39 @@ def ventes():
                         db.session.rollback()
                         return redirect(url_for('routes.ventes'))
                     
+                    # Calculer le prix unitaire réel
+                    prix_unitaire = item.prix
+                    
                     # Créer la vente
                     nouvelle_vente = Ventes(
                         produit_id=item.produit_id,
                         facture_id=nouvelle_facture.id,
                         quantite=item.quantite,
-                        montant_total=item.prix * item.quantite
+                        montant_total=prix_unitaire * item.quantite
                     )
                     db.session.add(nouvelle_vente)
                     
                     # Mettre à jour le stock
                     produit.quantite -= item.quantite
+                    
+                    # Enregistrer la transaction de sortie
+                    transaction = TransactionsProduit(
+                        produit_id=item.produit_id,
+                        type='sortie',
+                        quantite=item.quantite,
+                        description=f"Vente facture #{nouvelle_facture.id} à {nom_client}"
+                    )
+                    db.session.add(transaction)
+
+                # Enregistrer le premier paiement si c'est un crédit avec paiement initial
+                if paiement_credit and montant_cash > 0:
+                    premier_paiement = Paiements(
+                        facture_id=nouvelle_facture.id,
+                        montant=montant_cash,
+                        mode_paiement='cash',
+                        description=f"Paiement initial pour facture crédit #{nouvelle_facture.id}"
+                    )
+                    db.session.add(premier_paiement)
 
                 # Vider le panier après la vente
                 Panier.query.filter_by(session_id=session_id).delete()
@@ -344,9 +418,13 @@ def ventes():
                 
                 # Récupérer la facture et les ventes pour l'affichage
                 facture = nouvelle_facture
-                ventes = Ventes.query.filter_by(facture_id=facture.id).all()
+                ventes_facture = Ventes.query.filter_by(facture_id=facture.id).all()
                 
-                flash("Vente finalisée avec succès!", "success")
+                # Message de succès différent selon le type de paiement
+                if paiement_credit:
+                    flash(f"Vente crédit #{facture.id} enregistrée avec succès! Montant crédit: {montant_credit:.2f} $", "success")
+                else:
+                    flash(f"Vente comptant #{facture.id} enregistrée avec succès!", "success")
                 
                 # Récupérer les produits et le panier (maintenant vide) pour l'affichage
                 produits = Produits.query.order_by(Produits.nom.asc()).all()
@@ -354,7 +432,7 @@ def ventes():
                 total = 0
                 
                 return render_template('ventes.html', produits=produits, panier=panier, total=total, 
-                                    facture=facture, ventes=ventes, montant_cash=montant_cash, 
+                                    facture=facture, ventes=ventes_facture, montant_cash=montant_cash, 
                                     montant_credit=montant_credit)
 
             except Exception as e:
@@ -369,16 +447,40 @@ def ventes():
 
     return render_template('ventes.html', produits=produits, panier=panier, total=total, 
                           facture=None, ventes=[], montant_cash=0, montant_credit=0)
-# Route pour imprimer une facture
-@bp.route('/factures/<int:id>/imprimer', methods=['GET'])
+# ==================== ROUTES DE FACTURES ====================
+
+@bp.route('/factures', methods=['GET'])
 @login_required
 @permission_required('gestion_ventes')
-def imprimer_facture(id):
+def factures():
+    search_term = request.args.get('search', '')
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+    
+    query = Factures.query
+    
+    if search_term:
+        query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
+    
+    if start_date:
+        query = query.filter(Factures.date_facture >= datetime.strptime(start_date, '%Y-%m-%d'))
+    
+    if end_date:
+        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
+        query = query.filter(Factures.date_facture < end_date_obj)
+    
+    factures_list = query.order_by(Factures.date_facture.desc()).all()
+    
+    return render_template('factures.html', factures=factures_list, search_term=search_term)
+
+@bp.route('/factures/<int:id>', methods=['GET'])
+@login_required
+@permission_required('gestion_ventes')
+def details_facture(id):
     facture = Factures.query.get_or_404(id)
     ventes = Ventes.query.filter_by(facture_id=id).all()
-    return render_template('imprimer_facture.html', facture=facture, ventes=ventes)
+    return render_template('details_facture.html', facture=facture, ventes=ventes)
 
-# Route pour obtenir les détails d'une facture en JSON (pour la modale)
 @bp.route('/factures/<int:id>/details.json')
 @login_required
 @permission_required('gestion_ventes')
@@ -386,7 +488,6 @@ def details_facture_json(id):
     facture = Factures.query.get_or_404(id)
     ventes = Ventes.query.filter_by(facture_id=id).all()
     
-    # Préparer les données pour le JSON
     facture_data = {
         'id': facture.id,
         'nom_client': facture.nom_client,
@@ -402,7 +503,7 @@ def details_facture_json(id):
         ventes_data.append({
             'produit_nom': vente.produit.nom,
             'quantite': vente.quantite,
-            'prix_unitaire': float(vente.montant_total / vente.quantite),
+            'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
             'montant_total': float(vente.montant_total)
         })
     
@@ -411,21 +512,179 @@ def details_facture_json(id):
         'ventes': ventes_data
     })
 
+@bp.route('/factures/<int:id>/edit')
+@login_required
+@permission_required('gestion_ventes')
+def get_facture_edit_data(id):
+    facture = Factures.query.get_or_404(id)
+    ventes = Ventes.query.filter_by(facture_id=id).all()
+    
+    ventes_data = []
+    for vente in ventes:
+        produit = Produits.query.get(vente.produit_id)
+        ventes_data.append({
+            'id': vente.id,
+            'produit_id': vente.produit_id,
+            'produit_nom': produit.nom if produit else 'Produit supprimé',
+            'quantite': vente.quantite,
+            'prix_unitaire': vente.prix_unitaire,
+            'prix_achat': produit.prix_achat if produit else 0,
+            'montant_total': vente.montant_total,
+            'stock_actuel': produit.quantite if produit else 0
+        })
+    
+    return jsonify({
+        'facture': {
+            'id': facture.id,
+            'nom_client': facture.nom_client,
+            'montant_total': facture.montant_total,
+            'paiement_credit': facture.paiement_credit,
+            'montant_cash': facture.montant_cash,
+            'montant_credit': facture.montant_credit
+        },
+        'ventes': ventes_data
+    })
 
-# Route pour afficher les factures en crédit
+@bp.route('/factures/<int:id>/imprimer', methods=['GET'])
+@login_required
+@permission_required('gestion_ventes')
+def imprimer_facture(id):
+    facture = Factures.query.get_or_404(id)
+    ventes = Ventes.query.filter_by(facture_id=id).all()
+    return render_template('imprimer_facture.html', facture=facture, ventes=ventes)
+
+@bp.route('/factures/<int:id>/modifier_articles', methods=['POST'])
+@login_required
+@permission_required('gestion_ventes')
+def modifier_articles_facture(id):
+    try:
+        data = request.get_json()
+        facture = Factures.query.get_or_404(id)
+        
+        if not data or 'ventes' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Données invalides'
+            })
+        
+        total_facture = 0
+        modifications = []
+        
+        for vente_data in data['ventes']:
+            vente_id = vente_data.get('id')
+            nouvelle_quantite = int(vente_data.get('quantite', 0))
+            nouveau_prix = float(vente_data.get('prix', 0))
+            
+            if vente_id and nouvelle_quantite > 0:
+                vente = Ventes.query.get(vente_id)
+                if vente and vente.facture_id == id:
+                    produit = Produits.query.get(vente.produit_id)
+                    
+                    if not produit:
+                        continue
+                    
+                    ancienne_quantite = vente.quantite
+                    ancien_prix_unitaire = vente.prix_unitaire
+                    difference = nouvelle_quantite - ancienne_quantite
+                    
+                    # Si la quantité augmente, vérifier le stock
+                    if difference > 0 and produit.quantite < difference:
+                        return jsonify({
+                            'success': False,
+                            'message': f'Stock insuffisant pour {produit.nom}. Stock actuel: {produit.quantite}'
+                        })
+                    
+                    # Si le prix change, vérifier qu'il n'est pas inférieur au prix d'achat
+                    if nouveau_prix > 0 and nouveau_prix != ancien_prix_unitaire:
+                        # Vérifier que le nouveau prix n'est pas inférieur au prix d'achat
+                        if nouveau_prix < produit.prix_achat:
+                            return jsonify({
+                                'success': False,
+                                'message': f'Le prix de vente ({nouveau_prix}) ne peut pas être inférieur au prix d\'achat ({produit.prix_achat}) pour {produit.nom}'
+                            })
+                        # Mettre à jour le prix unitaire
+                        vente.prix_unitaire = nouveau_prix
+                    
+                    # Calculer le nouveau montant
+                    prix_unitaire = vente.prix_unitaire
+                    nouveau_montant = prix_unitaire * nouvelle_quantite
+                    
+                    # Mettre à jour le stock
+                    produit.quantite -= difference
+                    
+                    # Mettre à jour la vente
+                    vente.quantite = nouvelle_quantite
+                    vente.montant_total = nouveau_montant
+                    
+                    total_facture += nouveau_montant
+                    
+                    # Enregistrer la modification pour le log
+                    modifications.append({
+                        'produit': produit.nom,
+                        'ancienne_quantite': ancienne_quantite,
+                        'nouvelle_quantite': nouvelle_quantite,
+                        'ancien_prix': ancien_prix_unitaire,
+                        'nouveau_prix': prix_unitaire,
+                        'ancien_montant': ancien_prix_unitaire * ancienne_quantite,
+                        'nouveau_montant': nouveau_montant
+                    })
+        
+        # Mettre à jour le montant total de la facture
+        ancien_total = facture.montant_total
+        facture.montant_total = total_facture
+        
+        # Ajuster les montants cash et crédit
+        if not facture.paiement_credit:
+            facture.montant_cash = total_facture
+            facture.montant_credit = 0
+        else:
+            # Pour le crédit, ajuster proportionnellement
+            ratio = total_facture / ancien_total if ancien_total > 0 else 1
+            facture.montant_cash = round(facture.montant_cash * ratio, 2)
+            facture.montant_credit = total_facture - facture.montant_cash
+            
+            # Si le crédit devient négatif, corriger
+            if facture.montant_credit < 0:
+                facture.montant_cash = total_facture
+                facture.montant_credit = 0
+                facture.paiement_credit = False
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Articles modifiés avec succès',
+            'nouveau_total': total_facture,
+            'modifications': modifications
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"Erreur dans modifier_articles_facture: {str(e)}")
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+# ==================== ROUTES DE FACTURES CREDIT ====================
+
 @bp.route('/factures_credit', methods=['GET'])
 @login_required
 @permission_required('gestion_ventes')
 def factures_credit():
     search_term = request.args.get('search', '')
-    # Filtrer uniquement les factures en crédit
+    
+    # IMPORTANT : Récupérer TOUTES les factures qui ont été en crédit
+    # On utilise a_ete_en_credit au lieu de paiement_credit
     if search_term:
         factures = Factures.query.filter(
-            Factures.paiement_credit == True,
+            Factures.a_ete_en_credit == True,  # ← CECI EST LA CLÉ
             Factures.nom_client.ilike(f'%{search_term}%')
         ).order_by(Factures.date_facture.desc()).all()
     else:
-        factures = Factures.query.filter_by(paiement_credit=True).order_by(Factures.date_facture.desc()).all()
+        factures = Factures.query.filter_by(
+            a_ete_en_credit=True  # ← CECI EST LA CLÉ
+        ).order_by(Factures.date_facture.desc()).all()
     
     # Calculer les totaux
     total_credit = sum(facture.montant_credit for facture in factures)
@@ -435,9 +694,9 @@ def factures_credit():
                          factures=factures, 
                          search_term=search_term,
                          total_credit=total_credit,
-                         total_factures=total_factures)
+                         total_factures=total_factures,
+                         now=datetime.now())
 
-# Route pour marquer une facture comme payée
 @bp.route('/marquer_facture_payee', methods=['POST'])
 @login_required
 @permission_required('gestion_ventes')
@@ -450,8 +709,9 @@ def marquer_facture_payee():
         
         facture = Factures.query.get_or_404(facture_id)
         
-        if not facture.paiement_credit:
-            flash("Cette facture n'est pas en crédit!", "danger")
+        # Vérifier si la facture a été en crédit
+        if not facture.a_ete_en_credit:
+            flash("Cette facture n'a pas été en crédit!", "danger")
             return redirect(url_for('routes.factures_credit'))
         
         if montant_paye > facture.montant_credit:
@@ -475,11 +735,14 @@ def marquer_facture_payee():
         facture.montant_cash += montant_paye
         facture.montant_credit -= montant_paye
         
-        # Si le crédit est entièrement payé, marquer comme non crédit
+        # IMPORTANT : NE PAS changer a_ete_en_credit
+        # La facture reste dans l'historique des crédits
+        
+        # Si le crédit est entièrement payé, on peut changer paiement_credit
         if facture.montant_credit <= 0:
-            facture.paiement_credit = False
             facture.montant_credit = 0
-            flash(f"Facture #{facture_id} marquée comme complètement payée!", "success")
+            facture.paiement_credit = False  # Marquer comme non crédit actif
+            flash(f"Facture #{facture_id} complètement payée! (reste visible pour historique)", "success")
         else:
             flash(f"Paiement partiel enregistré pour la facture #{facture_id}. Reste: {facture.montant_credit:.2f} $", "warning")
         
@@ -490,8 +753,6 @@ def marquer_facture_payee():
         flash(f"Erreur lors de l'enregistrement du paiement: {e}", "danger")
     
     return redirect(url_for('routes.factures_credit'))
-
-# Route pour afficher l'historique des paiements d'une facture
 @bp.route('/factures/<int:facture_id>/paiements')
 @login_required
 @permission_required('gestion_ventes')
@@ -516,15 +777,12 @@ def historique_paiements(facture_id):
         } for p in paiements]
     })
 
-# Route pour imprimer un reçu de paiement
-# Route pour imprimer un reçu de paiement
 @bp.route('/paiements/<int:paiement_id>/imprimer_recu')
 @login_required
 @permission_required('gestion_ventes')
 def imprimer_recu_paiement(paiement_id):
     paiement = Paiements.query.get_or_404(paiement_id)
     facture = paiement.facture
-    # Récupérer les ventes (articles) de la facture
     ventes = Ventes.query.filter_by(facture_id=facture.id).all()
     
     return render_template('recu_paiement.html', 
@@ -532,24 +790,8 @@ def imprimer_recu_paiement(paiement_id):
                          facture=facture,
                          ventes=ventes)
 
-# Context processor pour injecter des variables dans tous les templates
-@bp.context_processor
-def inject_common_variables():
-    common_vars = {
-        'factures_credit_count': 0,
-        'now': datetime.now()
-    }
-    
-    try:
-        if current_user.is_authenticated and hasattr(current_user, 'has_permission'):
-            if current_user.has_permission('voir_historique_vente'):
-                common_vars['factures_credit_count'] = Factures.query.filter_by(paiement_credit=True).count()
-    except Exception as e:
-        print(f"Error in context processor: {e}")
-        common_vars['factures_credit_count'] = 0
-        
-    return common_vars
-# Route pour afficher l'historique des ventes
+# ==================== ROUTES D'HISTORIQUE ====================
+
 @bp.route('/historique_ventes')
 @login_required
 @permission_required('voir_historique_vente')
@@ -557,7 +799,8 @@ def historique_ventes():
     ventes = Ventes.query.join(Factures).order_by(Factures.date_facture.asc()).all()
     return render_template('historique_ventes.html', ventes=ventes)
 
-# Route pour afficher la liste des dépenses ordinaires
+# ==================== ROUTES DE DÉPENSES ====================
+
 @bp.route('/depenses_ordinaires')
 @login_required
 @permission_required('gestion_depenses_ordinaires')
@@ -565,7 +808,6 @@ def gestion_depenses_ordinaires():
     depenses_ordinaires = Depenses.query.filter_by(est_recurrente=False).order_by(Depenses.date_depense.desc()).all()
     return render_template('gestion_depenses_ordinaires.html', depenses=depenses_ordinaires)
 
-# Route pour afficher la liste des dépenses récurrentes
 @bp.route('/depenses_recurrentes')
 @login_required
 @permission_required('gestion_depenses_recurrentes')
@@ -573,7 +815,6 @@ def gestion_depenses_recurrentes():
     depenses_recurrentes = Depenses.query.filter_by(est_recurrente=True).order_by(Depenses.date_depense.desc()).all()
     return render_template('gestion_depenses_recurrentes.html', depenses=depenses_recurrentes)
 
-# Route pour ajouter une dépense
 @bp.route('/ajouter_depense', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_ordinaires')
@@ -582,7 +823,7 @@ def ajouter_depense():
         description = request.form['description']
         montant = float(request.form['montant'])
         categorie = request.form.get('categorie', '')
-        est_recurrente = 'est_recurrente' in request.form  # Vérifie si la case est cochée
+        est_recurrente = 'est_recurrente' in request.form
         frequence_recurrence = request.form.get('frequence_recurrence', None) if est_recurrente else None
 
         nouvelle_depense = Depenses(
@@ -600,7 +841,6 @@ def ajouter_depense():
         flash(f"Erreur lors de l'ajout de la dépense: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_ordinaires'))
 
-# Route pour modifier une dépense
 @bp.route('/modifier_depense/<int:id>', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_ordinaires')
@@ -619,7 +859,6 @@ def modifier_depense(id):
         flash(f"Erreur lors de la modification de la dépense: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_ordinaires'))
 
-# Route pour supprimer une dépense
 @bp.route('/supprimer_depense', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_ordinaires')
@@ -635,7 +874,6 @@ def supprimer_depense():
         flash(f"Erreur lors de la suppression de la dépense: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_ordinaires'))
 
-# Route pour ajouter une dépense récurrente
 @bp.route('/ajouter_depense_recurrente', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_recurrentes')
@@ -650,7 +888,7 @@ def ajouter_depense_recurrente():
             description=description,
             montant=montant,
             categorie=categorie,
-            est_recurrente=True,  # Toujours récurrente pour cette route
+            est_recurrente=True,
             frequence_recurrence=frequence_recurrence
         )
         db.session.add(nouvelle_depense)
@@ -661,7 +899,6 @@ def ajouter_depense_recurrente():
         flash(f"Erreur lors de l'ajout de la dépense récurrente: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_recurrentes'))
 
-# Route pour modifier une dépense récurrente
 @bp.route('/modifier_depense_recurrente/<int:id>', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_recurrentes')
@@ -679,7 +916,6 @@ def modifier_depense_recurrente(id):
         flash(f"Erreur lors de la modification de la dépense récurrente: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_recurrentes'))
 
-# Route pour supprimer une dépense récurrente
 @bp.route('/supprimer_depense_recurrente', methods=['POST'])
 @login_required
 @permission_required('gestion_depenses_recurrentes')
@@ -695,51 +931,44 @@ def supprimer_depense_recurrente():
         flash(f"Erreur lors de la suppression de la dépense récurrente: {e}", "danger")
     return redirect(url_for('routes.gestion_depenses_recurrentes'))
 
-# Route pour afficher les bénéfices
+# ==================== ROUTES DE BÉNÉFICES ====================
+
 @bp.route('/benefices')
 @login_required
 @permission_required('voir_benefice')
 def gestion_benefices():
-    # Récupérer les dates de filtrage (si elles sont fournies)
     date_debut = request.args.get('date_debut')
     date_fin = request.args.get('date_fin')
 
-    # Si les dates ne sont pas fournies, utiliser la date du jour
     if not date_debut or not date_fin:
         aujourd_hui = datetime.now().strftime('%Y-%m-%d')
         date_debut = aujourd_hui
         date_fin = aujourd_hui
 
-    # Convertir les dates en objets datetime pour le filtrage
     date_debut_obj = datetime.strptime(date_debut, '%Y-%m-%d')
-    date_fin_obj = datetime.strptime(date_fin, '%Y-%m-%d') + timedelta(days=1)  # Ajouter 1 jour pour inclure toute la journée
+    date_fin_obj = datetime.strptime(date_fin, '%Y-%m-%d') + timedelta(days=1)
 
-    # Base de la requête pour les ventes
     query_ventes = db.session.query(
         Produits.nom,
-        Factures.date_facture.label('date_facture'),  # Ajouter la date de la facture
+        Factures.date_facture.label('date_facture'),
         db.func.sum(Ventes.quantite).label('quantite_vendue'),
         db.func.sum(Ventes.montant_total).label('montant_ventes'),
         db.func.sum(Ventes.quantite * Produits.prix_achat).label('cout_achat'),
         db.func.sum(Ventes.montant_total - (Ventes.quantite * Produits.prix_achat)).label('benefice')
     ).join(Produits, Ventes.produit_id == Produits.id) \
-    .join(Factures, Ventes.facture_id == Factures.id)  # Jointure avec Factures
+     .join(Factures, Ventes.facture_id == Factures.id)
 
-    # Appliquer le filtrage par date
     query_ventes = query_ventes.filter(Factures.date_facture >= date_debut_obj) \
-                               .filter(Factures.date_facture < date_fin_obj)  # Utiliser < pour exclure la date de fin
+                               .filter(Factures.date_facture < date_fin_obj)
 
-    # Calculer les bénéfices par produit
     benefices_par_produit = query_ventes.group_by(Produits.nom, Factures.date_facture).all()
 
-    # Calculer le total des ventes
     total_ventes = db.session.query(db.func.sum(Ventes.montant_total)) \
         .join(Factures, Ventes.facture_id == Factures.id) \
         .filter(Factures.date_facture >= date_debut_obj) \
         .filter(Factures.date_facture < date_fin_obj) \
         .scalar() or 0
 
-    # Calculer le total des coûts des marchandises vendues (corrigé)
     total_couts = db.session.query(
         db.func.sum(Ventes.quantite * Produits.prix_achat)
     ).join(Produits, Ventes.produit_id == Produits.id) \
@@ -748,16 +977,13 @@ def gestion_benefices():
         .filter(Factures.date_facture < date_fin_obj) \
         .scalar() or 0
 
-    # Calculer le bénéfice brut (total des ventes - total des coûts)
     benefice_brut = total_ventes - total_couts
 
-    # Calculer le total des dépenses (ordinaires et récurrentes)
     total_depenses = db.session.query(db.func.sum(Depenses.montant)) \
         .filter(Depenses.date_depense >= date_debut_obj) \
         .filter(Depenses.date_depense < date_fin_obj) \
         .scalar() or 0
 
-    # Calculer le bénéfice net (bénéfice brut - total des dépenses)
     benefice_net = benefice_brut - total_depenses
 
     return render_template(
@@ -772,7 +998,8 @@ def gestion_benefices():
         date_fin=date_fin
     )
 
-# Route pour afficher les transactions de dépôt
+# ==================== ROUTES DE DÉPÔT ====================
+
 @bp.route('/gestion_transactions_depot')
 @login_required
 @permission_required('gestion_depot')
@@ -781,7 +1008,6 @@ def gestion_transactions_depot():
     produits = Produits.query.order_by(Produits.nom.asc()).all()
     return render_template('gestion_transactions_depot.html', transactions=transactions, produits=produits)
 
-# Route pour ajouter une transaction de dépôt
 @bp.route('/ajouter_transaction_depot', methods=['POST'])
 @login_required
 @permission_required('gestion_depot')
@@ -790,7 +1016,7 @@ def ajouter_transaction_depot():
         produit_id = int(request.form['produit_id'])
         quantite = int(request.form['quantite'])
         type_transaction = request.form['type_transaction']
-        description = request.form.get('description', '')  # Récupérer la description
+        description = request.form.get('description', '')
 
         produit = Produits.query.get_or_404(produit_id)
 
@@ -809,7 +1035,7 @@ def ajouter_transaction_depot():
             produit_id=produit_id,
             quantite=quantite,
             type_transaction=type_transaction,
-            description=description  # Ajouter la description
+            description=description
         )
         db.session.add(nouvelle_transaction)
         db.session.commit()
@@ -819,12 +1045,12 @@ def ajouter_transaction_depot():
         flash(f"Erreur lors de l'ajout de la transaction de dépôt: {e}", "danger")
     return redirect(url_for('routes.gestion_transactions_depot'))
 
-# Récupérer tous les produits avec leur quantité en dépôt
+# ==================== ROUTES DE STOCK ====================
+
 @bp.route('/stock_depot')
 @login_required
 @permission_required('voir_stock_depot')
 def stock_depot():
-    # Récupérer tous les produits avec leur quantité en dépôt
     produits = Produits.query.filter(Produits.quantite_depot > 0).all()
     return render_template('stock_depot.html', produits=produits)
 
@@ -832,7 +1058,6 @@ def stock_depot():
 @login_required
 @permission_required('voir_stock_boutique')
 def stock_boutique():
-    # Récupérer tous les produits avec leur quantité en boutique
     produits = Produits.query.filter(Produits.quantite > 0).all()
     return render_template('stock_boutique.html', produits=produits)
 
@@ -840,10 +1065,8 @@ def stock_boutique():
 @login_required
 @permission_required('voir_stock_globale')
 def stock_global():
-    # Récupérer tous les produits avec leur quantité en magasin et en dépôt
     produits = Produits.query.all()
     
-    # Calculer le coût total pour chaque produit et le coût total global
     cout_total_global = 0
     cout_global_depot = 0
     cout_global_magasin = 0 
@@ -851,8 +1074,8 @@ def stock_global():
     
     for produit in produits:
         cout_total_produit = (produit.quantite + produit.quantite_depot) * produit.prix_achat
-        cout_total_magasin =produit.quantite * produit.prix_achat
-        cout_total_depot =produit.quantite_depot * produit.prix_achat
+        cout_total_magasin = produit.quantite * produit.prix_achat
+        cout_total_depot = produit.quantite_depot * produit.prix_achat
         cout_total_global += cout_total_produit
         cout_global_magasin += cout_total_magasin
         cout_global_depot += cout_total_depot
@@ -864,14 +1087,17 @@ def stock_global():
                 'quantite_depot': produit.quantite_depot,
                 'prix_achat': produit.prix_achat,
                 'description': produit.description,
-                # Ajoutez d'autres champs si nécessaire
             },
             'cout_total': cout_total_produit
-            
-
         })
     
-    return render_template('stock_global.html', produits_avec_cout=produits_avec_cout, cout_total_global=cout_total_global,cout_global_magasin=cout_global_magasin,cout_global_depot=cout_global_depot)
+    return render_template('stock_global.html', 
+                         produits_avec_cout=produits_avec_cout, 
+                         cout_total_global=cout_total_global,
+                         cout_global_magasin=cout_global_magasin,
+                         cout_global_depot=cout_global_depot)
+
+# ==================== ROUTES DE CAISSE ====================
 
 @bp.route('/gestion_caisse', methods=['GET', 'POST'])
 @login_required
@@ -895,17 +1121,14 @@ def gestion_caisse():
         except Exception as e:
             db.session.rollback()
             flash(f"Erreur lors de l'ajout de la transaction: {e}", "danger")
-        
-        # Rediriger vers la même page après l'ajout
         return redirect(url_for('routes.gestion_caisse'))
 
-    # Récupérer toutes les transactions
     transactions = Caisse.query.order_by(Caisse.date_transaction.desc()).all()
-
-    # Calculer le solde actuel
     solde = sum(t.montant if t.type_transaction == 'entree' else -t.montant for t in transactions)
 
     return render_template('gestion_caisse.html', transactions=transactions, solde=solde)
+
+# ==================== ROUTES DE BANQUE ====================
 
 @bp.route('/gestion_compte_bancaire', methods=['GET', 'POST'])
 @login_required
@@ -929,44 +1152,15 @@ def gestion_compte_bancaire():
         except Exception as e:
             db.session.rollback()
             flash(f"Erreur lors de l'ajout de la transaction bancaire: {e}", "danger")
-        
-        # Rediriger vers la même page après l'ajout
         return redirect(url_for('routes.gestion_compte_bancaire'))
 
-    # Récupérer toutes les transactions bancaires
     transactions = CompteBancaire.query.order_by(CompteBancaire.date_transaction.desc()).all()
-
-    # Calculer le solde actuel
     solde = sum(t.montant if t.type_transaction == 'depot' else -t.montant for t in transactions)
 
     return render_template('gestion_compte_bancaire.html', transactions=transactions, solde=solde)
 
-# Fonction pour générer un nom de fichier unique
-def generate_unique_filename(filename):
-    secure_name = secure_filename(filename)
-    unique_id = uuid.uuid4().hex
-    return f"{unique_id}_{secure_name}"
+# ==================== ROUTES D'UTILISATEURS ====================
 
-# Fonction pour compresser une image
-def compress_image(file_path, quality=85):
-    try:
-        img = Image.open(file_path)
-        img.save(file_path, quality=quality)
-    except Exception as e:
-        print(f"Erreur lors de la compression de l'image : {e}")
-
-# Fonction pour vérifier les extensions de fichiers
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
-
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Fonction pour supprimer un fichier
-def delete_file(file_path):
-    if os.path.exists(file_path):
-        os.remove(file_path)
-
-# Définir les permissions par rôle
 DEFAULT_ROLE_PERMISSIONS = {
     'admin': [
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
@@ -985,17 +1179,14 @@ DEFAULT_ROLE_PERMISSIONS = {
     ],
 }
 
-# Route pour gérer les utilisateurs
 @bp.route('/gestion_utilisateurs', methods=['GET', 'POST'])
 @login_required
 @permission_required('gestion_utilisateurs')
 def gestion_utilisateurs():
-    # Seuls les administrateurs peuvent accéder à cette page
     if not current_user.is_admin():
         flash("Accès refusé. Vous n'avez pas les permissions nécessaires.", 'danger')
         return redirect(url_for('routes.index'))
 
-    # Liste de toutes les permissions disponibles
     all_permissions = [
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
         'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 'voir_benefice', 
@@ -1003,10 +1194,8 @@ def gestion_utilisateurs():
         'gestion_transactions_stock_boutique'
     ]
 
-    # Gestion des utilisateurs
     if request.method == 'POST':
         if 'ajouter_utilisateur' in request.form:
-            # Ajouter un nouvel utilisateur
             try:
                 email = request.form['email']
                 password = request.form['password']
@@ -1015,25 +1204,19 @@ def gestion_utilisateurs():
                 role = request.form['role']
                 photo = request.files['photo']
 
-                # Vérifier si l'email est déjà utilisé
-                user = User.query.filter_by(email=email).first()
-                if user:
+                if User.query.filter_by(email=email).first():
                     flash("Cet email est déjà enregistré.", 'danger')
                 else:
-                    # Récupérer les permissions par défaut en fonction du rôle
                     permissions = DEFAULT_ROLE_PERMISSIONS.get(role, [])
-
-                    # Créer un nouvel utilisateur
                     new_user = User(
                         email=email,
                         firstname=firstname,
                         lastname=lastname,
                         role=role,
-                        permissions=permissions  # Assigner les permissions par défaut
+                        permissions=permissions
                     )
                     new_user.set_password(password)
 
-                    # Gérer l'upload de la photo
                     if photo and photo.filename != '':
                         filename = secure_filename(photo.filename)
                         unique_filename = f"{uuid.uuid4().hex}_{filename}"
@@ -1049,34 +1232,26 @@ def gestion_utilisateurs():
                 flash(f"Erreur lors de l'ajout de l'utilisateur: {str(e)}", 'danger')
 
         elif 'modifier_utilisateur' in request.form:
-            # Modifier un utilisateur existant
             try:
                 user_id = request.form['user_id']
                 user = User.query.get_or_404(user_id)
 
-                # Mettre à jour les informations de l'utilisateur
                 user.email = request.form['email']
                 user.firstname = request.form['firstname']
                 user.lastname = request.form['lastname']
                 user.role = request.form['role']
-
-                # Mettre à jour les permissions en fonction du nouveau rôle
                 user.permissions = DEFAULT_ROLE_PERMISSIONS.get(user.role, [])
 
-                # Mettre à jour le mot de passe si un nouveau mot de passe est fourni
                 if request.form['password']:
                     user.set_password(request.form['password'])
 
-                # Gérer l'upload de la photo
                 photo = request.files['photo']
                 if photo and photo.filename != '':
-                    # Supprimer l'ancienne photo si elle existe
                     if user.photo:
                         old_photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.photo.split('/')[-1])
                         if os.path.exists(old_photo_path):
                             os.remove(old_photo_path)
 
-                    # Enregistrer la nouvelle photo
                     filename = secure_filename(photo.filename)
                     unique_filename = f"{uuid.uuid4().hex}_{filename}"
                     photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
@@ -1090,12 +1265,10 @@ def gestion_utilisateurs():
                 flash(f"Erreur lors de la modification de l'utilisateur: {str(e)}", 'danger')
 
         elif 'supprimer_utilisateur' in request.form:
-            # Supprimer un utilisateur
             try:
                 user_id = request.form['user_id']
                 user = User.query.get_or_404(user_id)
 
-                # Supprimer la photo de l'utilisateur si elle existe
                 if user.photo:
                     photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.photo.split('/')[-1])
                     if os.path.exists(photo_path):
@@ -1109,130 +1282,24 @@ def gestion_utilisateurs():
                 flash(f"Erreur lors de la suppression de l'utilisateur: {str(e)}", 'danger')
 
         elif 'modifier_permissions' in request.form:
-            # Modifier les permissions d'un utilisateur
             try:
                 user_id = request.form['user_id']
                 user = User.query.get_or_404(user_id)
-
-                # Récupérer les permissions sélectionnées
                 permissions = request.form.getlist('permissions')
-                user.permissions = permissions  # Mettre à jour les permissions
-
+                user.permissions = permissions
                 db.session.commit()
                 flash("Permissions mises à jour avec succès!", 'success')
             except Exception as e:
                 db.session.rollback()
                 flash(f"Erreur lors de la mise à jour des permissions: {str(e)}", 'danger')
 
-        # Rediriger après chaque action POST pour éviter la soumission répétée
         return redirect(url_for('routes.gestion_utilisateurs'))
 
-    # Récupérer tous les utilisateurs pour affichage
     utilisateurs = User.query.all()
     return render_template('gestion_utilisateurs.html', utilisateurs=utilisateurs, all_permissions=all_permissions)
 
-# Route pour la page de connexion
-@bp.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        # Récupérer les données du formulaire
-        email = request.form.get('email')
-        password = request.form.get('password')
+# ==================== ROUTES DE PRODUITS EN ROUTE ====================
 
-        # Vérifier si l'utilisateur existe dans la base de données
-        user = User.query.filter_by(email=email).first()
-
-        if user:
-            # Vérifier si le mot de passe est correct
-            if bcrypt.check_password_hash(user.password, password):
-                # Connexion réussie
-                login_user(user)  # Connecter l'utilisateur avec Flask-Login
-                flash('Connexion réussie!', 'success')
-                return redirect(url_for('routes.index'))  # Rediriger vers la page d'accueil
-            else:
-                # Mot de passe incorrect
-                flash('Mot de passe incorrect.', 'danger')
-        else:
-            # Utilisateur non trouvé
-            flash('Aucun utilisateur trouvé avec cet email.', 'danger')
-
-    # Afficher le formulaire de connexion
-    return render_template('login.html')
-
-# Route pour déconnecter l'utilisateur
-@bp.route('/logout')
-@login_required
-def logout():
-    logout_user()
-    flash("Vous avez été déconnecté avec succès.", 'success')
-    return redirect(url_for('routes.login'))
-
-# Route pour afficher et modifier le profil de l'utilisateur
-@bp.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    if request.method == 'POST':
-        try:
-            # Mettre à jour les informations de l'utilisateur
-            current_user.firstname = request.form['firstname']
-            current_user.lastname = request.form['lastname']
-            current_user.email = request.form['email']
-
-            # Mettre à jour le mot de passe si un nouveau mot de passe est fourni
-            if request.form['password']:
-                current_user.set_password(request.form['password'])
-
-            # Gérer l'upload de la photo de profil
-            photo = request.files['photo']
-            if photo and photo.filename != '':
-                # Supprimer l'ancienne photo si elle existe
-                if current_user.photo:
-                    old_photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], current_user.photo.split('/')[-1])
-                    if os.path.exists(old_photo_path):
-                        os.remove(old_photo_path)
-
-                # Enregistrer la nouvelle photo
-                filename = secure_filename(photo.filename)
-                unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-                photo.save(photo_path)
-                current_user.photo = f"uploads/{unique_filename}"
-
-            db.session.commit()
-            flash("Profil mis à jour avec succès !", 'success')
-        except Exception as e:
-            db.session.rollback()
-            flash(f"Erreur lors de la mise à jour du profil : {str(e)}", 'danger')
-
-    return render_template('profile.html', user=current_user)
-
-# Charger l'utilisateur pour Flask-Login
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-
-@bp.route('/parametres')
-@login_required
-def parametres():
-    return render_template('parametres.html')
-
-
-@bp.route('/search_produits')
-def search_produits():
-    query = request.args.get('q', '').strip()
-    if query:
-        produits = Produits.query.filter(Produits.nom.ilike(f'%{query}%')).all()
-        produits_data = [{
-            'id': produit.id,
-            'nom': produit.nom,
-            'quantite': produit.quantite,
-            'prix': produit.prix
-        } for produit in produits]
-        return jsonify(produits_data)
-    return jsonify([])
-
-# Route pour afficher les produits en route
 @bp.route('/produits_en_route')
 @login_required
 @permission_required('gestion_produits')
@@ -1240,7 +1307,6 @@ def produits_en_route():
     produits = ProduitsEnRoute.query.all()
     return render_template('produits_en_route.html', produits=produits)
 
-# Route pour ajouter un produit en route
 @bp.route('/ajouter_produit_en_route', methods=['GET', 'POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -1271,17 +1337,14 @@ def ajouter_produit_en_route():
 def receptionner_produit_en_route(id):
     produit_en_route = ProduitsEnRoute.query.get_or_404(id)
     produit = Produits.query.get_or_404(produit_en_route.produit_id)
-    destination = request.form['destination']  # 'depot' ou 'magasin'
+    destination = request.form['destination']
 
     try:
-        # Mettre à jour le statut
         produit_en_route.statut = 'arrivé'
-        # Retirer la quantité en route
         produit.en_route = max(0, produit.en_route - produit_en_route.quantite)
 
         if destination == 'depot':
             produit.quantite_depot += produit_en_route.quantite
-            # Historique transaction dépôt
             transaction = TransactionDepot(
                 produit_id=produit.id,
                 quantite=produit_en_route.quantite,
@@ -1291,7 +1354,6 @@ def receptionner_produit_en_route(id):
             db.session.add(transaction)
         else:
             produit.quantite += produit_en_route.quantite
-            # Historique transaction magasin
             transaction = TransactionsProduit(
                 produit_id=produit.id,
                 type='entree',
@@ -1307,7 +1369,6 @@ def receptionner_produit_en_route(id):
         flash(f"Erreur lors de la réception : {e}", "danger")
     return redirect(url_for('routes.produits_en_route'))
 
-# Route pour modifier un produit en route
 @bp.route('/modifier_produit_en_route/<int:id>', methods=['GET', 'POST'])
 @login_required
 @permission_required('gestion_produits')
@@ -1323,94 +1384,52 @@ def modifier_produit_en_route(id):
     produits = Produits.query.all()
     return render_template('modifier_produit_en_route.html', produit_en_route=produit_en_route, produits=produits)
 
+# ==================== ROUTE DE SAUVEGARDE ====================
 
-
-
-# Route pour télécharger la base de données (SQLite + SQL dans un ZIP)
 @bp.route('/telecharger_base_donnees')
 @login_required
 @permission_required('gestion_utilisateurs')
 def telecharger_base_donnees():
     try:
-        # Obtenir le chemin de la base de données
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI')
-        
-        # Extraire le chemin du fichier de la URI (pour SQLite)
+
         if db_uri.startswith('sqlite:///'):
             db_file = db_uri.replace('sqlite:///', '')
-            db_file = db_file.replace('/', '\\')
-            
+
             if not os.path.exists(db_file):
                 flash("Fichier de base de données introuvable!", "danger")
                 return redirect(url_for('routes.gestion_utilisateurs'))
-            
-            # Créer un dossier temporaire
-            temp_dir = os.path.join(current_app.config['UPLOAD_FOLDER'], 'temp')
+
+            temp_dir = os.path.join('/tmp', 'backups')
             os.makedirs(temp_dir, exist_ok=True)
-            
+
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             backup_folder = os.path.join(temp_dir, f"backup_{timestamp}")
             os.makedirs(backup_folder, exist_ok=True)
-            
-            # 1. Copier le fichier SQLite
+
             sqlite_filename = f"backup_{timestamp}.db"
             sqlite_path = os.path.join(backup_folder, sqlite_filename)
             shutil.copy(db_file, sqlite_path)
-            
-            # 2. Générer le fichier SQL
+
             sql_filename = f"backup_{timestamp}.sql"
             sql_path = os.path.join(backup_folder, sql_filename)
-            
-            try:
-                # Utiliser sqlite3 pour exporter en SQL
-                subprocess.run(
-                    f'sqlite3 "{db_file}" ".dump" > "{sql_path}"',
-                    shell=True,
-                    check=True,
-                    capture_output=True
-                )
-            except subprocess.CalledProcessError as e:
-                flash(f"Erreur lors de la génération du SQL: {str(e)}", "warning")
-            
-            # 3. Créer un fichier ZIP contenant les deux formats
+
+            conn = sqlite3.connect(db_file)
+            with open(sql_path, 'w', encoding='utf-8') as f:
+                for line in conn.iterdump():
+                    f.write(f"{line}\n")
+            conn.close()
+
             zip_filename = f"backup_base_donnees_{timestamp}.zip"
             zip_path = os.path.join(temp_dir, zip_filename)
-            
+
             with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                # Ajouter le fichier SQLite
                 zipf.write(sqlite_path, arcname=sqlite_filename)
-                
-                # Ajouter le fichier SQL s'il existe
-                if os.path.exists(sql_path):
-                    zipf.write(sql_path, arcname=sql_filename)
-                
-                # Ajouter un fichier README
-                readme_content = f"""SAUVEGARDE DE LA BASE DE DONNÉES
-================================
+                zipf.write(sql_path, arcname=sql_filename)
+                zipf.writestr('README.txt', f"Sauvegarde créée le {datetime.now()}")
 
-Date: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}
-
-Contenu du ZIP:
-- {sqlite_filename}: Base de données au format SQLite
-- {sql_filename}: Dump SQL complète de la base de données
-
-Comment restaurer:
-
-1. À partir du fichier SQLite (.db):
-   - Copier le fichier .db au même endroit que l'original
-
-2. À partir du fichier SQL (.sql):
-   - Ouvrir une invite de commande dans le dossier du fichier
-   - Exécuter: sqlite3 nouvelle_base.db < backup_*.sql
-
-Pour plus d'informations, consultez la documentation SQLite.
-"""
-                zipf.writestr('README.txt', readme_content)
-            
-            # Nettoyer le dossier temporaire
             shutil.rmtree(backup_folder)
-            
-            # Télécharger le fichier ZIP
+
             return send_file(
                 zip_path,
                 as_attachment=True,
@@ -1418,9 +1437,38 @@ Pour plus d'informations, consultez la documentation SQLite.
                 mimetype='application/zip'
             )
         else:
-            flash("Type de base de données non supporté pour le téléchargement!", "danger")
+            flash("Type de base de données non supporté!", "danger")
             return redirect(url_for('routes.gestion_utilisateurs'))
-            
+
     except Exception as e:
-        flash(f"Erreur lors du téléchargement de la base de données: {str(e)}", "danger")
+        flash(f"Erreur lors du téléchargement: {str(e)}", "danger")
         return redirect(url_for('routes.gestion_utilisateurs'))
+
+# ==================== FONCTIONS UTILITAIRES ====================
+
+def generate_unique_filename(filename):
+    secure_name = secure_filename(filename)
+    unique_id = uuid.uuid4().hex
+    return f"{unique_id}_{secure_name}"
+
+def compress_image(file_path, quality=85):
+    try:
+        img = Image.open(file_path)
+        img.save(file_path, quality=quality)
+    except Exception as e:
+        print(f"Erreur lors de la compression de l'image : {e}")
+
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def delete_file(file_path):
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+# ==================== LOADER FLASK-LOGIN ====================
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
