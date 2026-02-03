@@ -1,0 +1,583 @@
+{% extends "layout.html" %}
+
+{% block title %}Détails Livraison #{{ livraison.id }} - MKM Shop{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1 text-dark fw-bold">
+                <i class="fas fa-truck text-primary me-2"></i>Détails de la Livraison
+            </h1>
+            <p class="text-muted small mb-0">Facture #{{ facture.id }} - {{ facture.nom_client }}</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <a href="{{ url_for('routes.gestion_livraisons') }}" class="btn btn-outline-secondary me-2">
+                <i class="fas fa-arrow-left me-1"></i> Retour
+            </a>
+            <a href="{{ url_for('routes.imprimer_facture', id=facture.id) }}" class="btn btn-outline-primary" target="_blank">
+                <i class="fas fa-print me-1"></i> Imprimer facture
+            </a>
+        </div>
+    </div>
+
+    <!-- Messages flash -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <!-- Informations principales -->
+        <div class="col-lg-8">
+            <!-- Carte d'information -->
+            <div class="card mb-4">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i> Informations de la livraison
+                    </h5>
+                    <span class="badge 
+                        {% if livraison.statut == 'en_attente' %}bg-warning text-dark
+                        {% elif livraison.statut == 'en_preparation' %}bg-info
+                        {% elif livraison.statut == 'prete' %}bg-success
+                        {% elif livraison.statut == 'livree' %}bg-primary
+                        {% elif livraison.statut == 'annulee' %}bg-danger
+                        {% endif %} fs-6">
+                        {% if livraison.statut == 'en_attente' %}EN ATTENTE
+                        {% elif livraison.statut == 'en_preparation' %}EN PRÉPARATION
+                        {% elif livraison.statut == 'prete' %}PRÊTE À LIVRER
+                        {% elif livraison.statut == 'livree' %}LIVRÉE
+                        {% elif livraison.statut == 'annulee' %}ANNULÉE
+                        {% endif %}
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">N° Facture:</th>
+                                    <td><strong>#{{ facture.id }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>Client:</th>
+                                    <td><strong>{{ facture.nom_client }}</strong></td>
+                                </tr>
+                                <tr>
+                                    <th>Montant total:</th>
+                                    <td><span class="badge bg-primary fs-6">{{ "%.2f"|format(facture.montant_total) }} $</span></td>
+                                </tr>
+                                <tr>
+                                    <th>Type paiement:</th>
+                                    <td>
+                                        {% if facture.paiement_credit %}
+                                        <span class="badge bg-warning text-dark">Crédit</span>
+                                        <small class="text-muted ms-2">Restant: {{ "%.2f"|format(facture.montant_credit) }} $</small>
+                                        {% else %}
+                                        <span class="badge bg-success">Comptant</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-borderless">
+                                <tr>
+                                    <th width="40%">Date commande:</th>
+                                    <td>{{ livraison.date_commande.strftime('%d/%m/%Y %H:%M') }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Vendeur:</th>
+                                    <td>{{ livraison.vendeur.firstname }} {{ livraison.vendeur.lastname }}</td>
+                                </tr>
+                                <tr>
+                                    <th>Lieu retrait:</th>
+                                    <td>
+                                        <span class="badge bg-secondary">
+                                            {% if livraison.lieu_retrait == 'depot_principal' %}Dépôt principal
+                                            {% elif livraison.lieu_retrait == 'depot_secondaire' %}Dépôt secondaire
+                                            {% elif livraison.lieu_retrait == 'entrepot' %}Entrepôt central
+                                            {% else %}{{ livraison.lieu_retrait }}{% endif %}
+                                        </span>
+                                    </td>
+                                </tr>
+                                {% if livraison.frais_livraison > 0 %}
+                                <tr>
+                                    <th>Frais livraison:</th>
+                                    <td><span class="text-danger">{{ "%.2f"|format(livraison.frais_livraison) }} $</span></td>
+                                </tr>
+                                {% endif %}
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Dates importantes -->
+                    {% if livraison.date_preparation or livraison.date_pret or livraison.date_livraison %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="mb-3"><i class="fas fa-history me-2"></i> Chronologie</h6>
+                            <div class="timeline">
+                                <div class="timeline-item {% if livraison.date_commande %}active{% endif %}">
+                                    <div class="timeline-marker"></div>
+                                    <div class="timeline-content">
+                                        <small>Commande</small>
+                                        <div class="fw-bold">{{ livraison.date_commande.strftime('%d/%m/%Y %H:%M') }}</div>
+                                    </div>
+                                </div>
+                                
+                                {% if livraison.date_preparation %}
+                                <div class="timeline-item active">
+                                    <div class="timeline-marker bg-info"></div>
+                                    <div class="timeline-content">
+                                        <small>Préparation commencée</small>
+                                        <div class="fw-bold">{{ livraison.date_preparation.strftime('%d/%m/%Y %H:%M') }}</div>
+                                        {% if livraison.prepareur %}
+                                        <small>Par: {{ livraison.prepareur.firstname }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if livraison.date_pret %}
+                                <div class="timeline-item active">
+                                    <div class="timeline-marker bg-success"></div>
+                                    <div class="timeline-content">
+                                        <small>Prête à livrer</small>
+                                        <div class="fw-bold">{{ livraison.date_pret.strftime('%d/%m/%Y %H:%M') }}</div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                
+                                {% if livraison.date_livraison %}
+                                <div class="timeline-item active">
+                                    <div class="timeline-marker bg-primary"></div>
+                                    <div class="timeline-content">
+                                        <small>Livrée</small>
+                                        <div class="fw-bold">{{ livraison.date_livraison.strftime('%d/%m/%Y %H:%M') }}</div>
+                                        {% if livraison.livreur %}
+                                        <small>Par: {{ livraison.livreur.firstname }}</small>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Notes -->
+                    {% if livraison.notes_preparation or livraison.notes_livraison %}
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <h6 class="mb-3"><i class="fas fa-sticky-note me-2"></i> Notes</h6>
+                            {% if livraison.notes_preparation %}
+                            <div class="alert alert-info mb-2">
+                                <strong>Préparation:</strong> {{ livraison.notes_preparation }}
+                            </div>
+                            {% endif %}
+                            {% if livraison.notes_livraison %}
+                            <div class="alert 
+                                {% if livraison.statut == 'annulee' %}alert-danger
+                                {% elif livraison.statut == 'livree' %}alert-success
+                                {% else %}alert-secondary{% endif %} mb-0">
+                                <strong>Livraison:</strong> {{ livraison.notes_livraison }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Liste des produits -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-boxes me-2"></i> Produits à livrer
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Produit</th>
+                                    <th class="text-center">Stock magasin</th>
+                                    <th class="text-center">Quantité</th>
+                                    <th class="text-center">Prix unitaire</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for vente in ventes %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-box text-primary me-3"></i>
+                                            <div>
+                                                <strong>{{ vente.produit.nom }}</strong>
+                                                {% if vente.produit.description %}
+                                                <div class="text-muted small">{{ vente.produit.description|truncate(50) }}</div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge 
+                                            {% if vente.produit.quantite >= vente.quantite %}bg-success
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ vente.produit.quantite }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold">{{ vente.quantite }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        {{ "%.2f"|format(vente.montant_total / vente.quantite) }} $
+                                    </td>
+                                    <td class="text-end fw-bold">
+                                        {{ "%.2f"|format(vente.montant_total) }} $
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <td colspan="4" class="text-end fw-bold">Total commande:</td>
+                                    <td class="text-end fw-bold text-primary">{{ "%.2f"|format(facture.montant_total) }} $</td>
+                                </tr>
+                                {% if livraison.frais_livraison > 0 %}
+                                <tr>
+                                    <td colspan="4" class="text-end fw-bold">Frais de livraison:</td>
+                                    <td class="text-end fw-bold text-danger">+{{ "%.2f"|format(livraison.frais_livraison) }} $</td>
+                                </tr>
+                                <tr>
+                                    <td colspan="4" class="text-end fw-bold">Total à payer:</td>
+                                    <td class="text-end fw-bold text-success">
+                                        {{ "%.2f"|format(facture.montant_total + livraison.frais_livraison) }} $
+                                    </td>
+                                </tr>
+                                {% endif %}
+                            </tfoot>
+                        </table>
+                    </div>
+                    
+                    <!-- Avertissement stock -->
+                    {% set stock_insuffisant = false %}
+                    {% for vente in ventes %}
+                        {% if vente.produit.quantite < vente.quantite %}
+                            {% set stock_insuffisant = true %}
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if stock_insuffisant and livraison.statut != 'livree' and livraison.statut != 'annulee' %}
+                    <div class="alert alert-danger mt-3">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Attention!</strong> Stock insuffisant pour certains produits. 
+                        Vérifiez le stock avant de confirmer la livraison.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cogs me-2"></i> Actions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if livraison.statut == 'en_attente' %}
+                    <!-- Commencer préparation -->
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="action" value="commencer_preparation">
+                        <div class="mb-3">
+                            <label class="form-label">Notes de préparation</label>
+                            <textarea class="form-control" name="notes_preparation" rows="3" placeholder="Ajouter des notes..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-info w-100">
+                            <i class="fas fa-play me-2"></i> Commencer la préparation
+                        </button>
+                    </form>
+                    
+                    <!-- Annuler -->
+                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#modalAnnuler">
+                        <i class="fas fa-times me-2"></i> Annuler la livraison
+                    </button>
+                    
+                    {% elif livraison.statut == 'en_preparation' %}
+                    <!-- Marquer comme prête -->
+                    <form method="POST" class="mb-3">
+                        <input type="hidden" name="action" value="marquer_prete">
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="fas fa-check me-2"></i> Marquer comme prête
+                        </button>
+                    </form>
+                    
+                    <!-- Annuler -->
+                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#modalAnnuler">
+                        <i class="fas fa-times me-2"></i> Annuler la livraison
+                    </button>
+                    
+                    {% elif livraison.statut == 'prete' %}
+                    <!-- Confirmer livraison -->
+                    <form method="POST">
+                        <input type="hidden" name="action" value="confirmer_livraison">
+                        <div class="mb-3">
+                            <label class="form-label">Frais de livraison supplémentaires ($)</label>
+                            <input type="number" class="form-control" name="frais_livraison" step="0.01" min="0" value="0">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Notes de livraison</label>
+                            <textarea class="form-control" name="notes_livraison" rows="3" placeholder="Ajouter des notes..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" 
+                                onclick="return confirm('Confirmer la livraison? Le stock magasin sera déduit.')">
+                            <i class="fas fa-truck me-2"></i> Confirmer la livraison
+                        </button>
+                    </form>
+                    
+                    {% elif livraison.statut == 'livree' %}
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>Livraison confirmée</strong>
+                        <div class="mt-2">
+                            <small>Date: {{ livraison.date_livraison.strftime('%d/%m/%Y %H:%M') }}</small><br>
+                            {% if livraison.livreur %}
+                            <small>Livreur: {{ livraison.livreur.firstname }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% elif livraison.statut == 'annulee' %}
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle me-2"></i>
+                        <strong>Livraison annulée</strong>
+                        <div class="mt-2">
+                            <small>Raison: {{ livraison.notes_livraison }}</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Informations de contact -->
+                    <div class="mt-4 pt-3 border-top">
+                        <h6 class="mb-3"><i class="fas fa-phone me-2"></i> Contact</h6>
+                        <p class="mb-2">
+                            <strong>Client:</strong> {{ facture.nom_client }}
+                        </p>
+                        {% if livraison.statut in ['en_attente', 'en_preparation', 'prete'] %}
+                        <div class="alert alert-info small">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Informez le client lorsque sa commande sera prête au dépôt.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Quick stats -->
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i> Informations rapides
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="display-6 fw-bold text-primary">{{ ventes|length }}</div>
+                            <small class="text-muted">Produits</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="display-6 fw-bold text-success">
+                                {{ ventes|sum(attribute='quantite') }}
+                            </div>
+                            <small class="text-muted">Quantité totale</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="display-6 fw-bold text-info">
+                                {% set stock_ok = true %}
+                                {% for vente in ventes %}
+                                    {% if vente.produit.quantite < vente.quantite %}
+                                        {% set stock_ok = false %}
+                                    {% endif %}
+                                {% endfor %}
+                                {% if stock_ok %}✓{% else %}✗{% endif %}
+                            </div>
+                            <small class="text-muted">Stock disponible</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="display-6 fw-bold 
+                                {% if livraison.statut == 'livree' %}text-success
+                                {% elif livraison.statut == 'annulee' %}text-danger
+                                {% else %}text-warning{% endif %}">
+                                {% if livraison.statut == 'en_attente' %}1
+                                {% elif livraison.statut == 'en_preparation' %}2
+                                {% elif livraison.statut == 'prete' %}3
+                                {% elif livraison.statut == 'livree' %}4
+                                {% elif livraison.statut == 'annulee' %}5
+                                {% endif %}/4
+                            </div>
+                            <small class="text-muted">Étape</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour annulation -->
+<div class="modal fade" id="modalAnnuler" tabindex="-1" aria-labelledby="modalAnnulerLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="POST">
+                <input type="hidden" name="action" value="annuler_livraison">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title" id="modalAnnulerLabel">
+                        <i class="fas fa-exclamation-triangle me-2"></i> Annuler la livraison
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="fas fa-warning me-2"></i>
+                        Cette action est irréversible. La livraison sera marquée comme annulée.
+                    </div>
+                    <div class="mb-3">
+                        <label for="raison_annulation" class="form-label">Raison de l'annulation *</label>
+                        <textarea class="form-control" id="raison_annulation" name="raison_annulation" rows="3" required placeholder="Pourquoi annuler cette livraison?"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Retour</button>
+                    <button type="submit" class="btn btn-danger">Confirmer l'annulation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Styles pour la timeline */
+.timeline {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: 0.75rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background-color: #e9ecef;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.timeline-item.active .timeline-marker {
+    background-color: #6c757d;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -2rem;
+    top: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 50%;
+    background-color: #adb5bd;
+    border: 2px solid white;
+}
+
+.timeline-content {
+    padding-left: 0.5rem;
+}
+
+/* Styles pour les cartes */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .d-flex.justify-content-between.align-items-center.mb-4 {
+        flex-direction: column;
+        align-items: flex-start !important;
+    }
+    
+    .col-lg-8, .col-lg-4 {
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.8rem;
+    }
+}
+</style>
+
+<script>
+// Initialisation
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-refresh toutes les 30 secondes pour les livraisons non terminées
+    if ('{{ livraison.statut }}' !== 'livree' && '{{ livraison.statut }}' !== 'annulee') {
+        setInterval(() => {
+            window.location.reload();
+        }, 30000); // 30 secondes
+    }
+    
+    // Validation pour l'annulation
+    const formAnnulation = document.querySelector('form[action="annuler_livraison"]');
+    if (formAnnulation) {
+        formAnnulation.addEventListener('submit', function(e) {
+            const raison = document.getElementById('raison_annulation').value;
+            if (!raison.trim()) {
+                e.preventDefault();
+                alert('Veuillez indiquer la raison de l\'annulation');
+                return false;
+            }
+            
+            if (!confirm('Êtes-vous sûr de vouloir annuler cette livraison ?')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    }
+    
+    // Validation pour la confirmation de livraison
+    const formConfirmation = document.querySelector('form[action="confirmer_livraison"]');
+    if (formConfirmation) {
+        formConfirmation.addEventListener('submit', function(e) {
+            const stockInsuffisant = {{ stock_insuffisant|tojson }};
+            if (stockInsuffisant) {
+                if (!confirm('Attention: Stock insuffisant pour certains produits. Voulez-vous quand même confirmer la livraison ?')) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

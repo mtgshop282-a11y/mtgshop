@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, current_app, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, current_app, jsonify, send_file, session
 import os, shutil, zipfile, io, sqlite3
 from datetime import datetime, timedelta
 import uuid
@@ -8,7 +8,8 @@ from . import login_manager
 from PIL import Image
 from functools import wraps
 from sqlalchemy import func
-from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute,Paiements
+from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute, Paiements, LivraisonDepot  
+
 # Création du Blueprint
 bp = Blueprint('routes', __name__)
 
@@ -28,7 +29,6 @@ def permission_required(permission):
     return decorator
 
 # Context processor
-# Modifiez le context processor pour qu'il compte les factures avec du crédit
 @bp.context_processor
 def inject_common_variables():
     common_vars = {'factures_credit_count': 0}
@@ -45,6 +45,7 @@ def inject_common_variables():
         common_vars['factures_credit_count'] = 0
         
     return common_vars
+
 # ==================== ROUTES D'AUTHENTIFICATION ====================
 
 @bp.route('/')
@@ -245,208 +246,420 @@ def ajouter_transaction():
     return redirect(url_for('routes.entrees_sorties'))
 
 # ==================== ROUTES DE VENTES ====================
+# ==================== NOUVELLES ROUTES API POUR VENTES AJAX ====================
 
-@bp.route('/ventes', methods=['GET', 'POST'])
+@bp.route('/api/panier/ajouter', methods=['POST'])
+@login_required
+@permission_required('gestion_ventes')
+def api_ajouter_au_panier():
+    """API AJAX pour ajouter un produit au panier"""
+    try:
+        data = request.get_json()
+        produit_id = int(data['produit_id'])
+        quantite = int(data['quantite'])
+        prix = float(data['prix'])
+        
+        if quantite <= 0 or prix <= 0:
+            return jsonify({
+                'success': False,
+                'message': 'La quantité et le prix doivent être positifs.'
+            }), 400
+        
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            session_id = str(uuid.uuid4())
+        
+        # Vérifier si le produit existe déjà dans le panier
+        item_existant = Panier.query.filter_by(
+            produit_id=produit_id, 
+            session_id=session_id
+        ).first()
+        
+        if item_existant:
+            return jsonify({
+                'success': False,
+                'message': 'Ce produit est déjà dans le panier.'
+            }), 400
+        
+        # Ajouter au panier
+        nouveau_panier = Panier(
+            produit_id=produit_id,
+            quantite=quantite,
+            prix=prix,
+            session_id=session_id
+        )
+        db.session.add(nouveau_panier)
+        db.session.commit()
+        
+        # Récupérer les infos du produit
+        produit = Produits.query.get(produit_id)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Produit ajouté au panier',
+            'panier_item': {
+                'id': nouveau_panier.id,
+                'produit_id': produit_id,
+                'produit_nom': produit.nom,
+                'quantite': quantite,
+                'prix': prix,
+                'total': quantite * prix
+            },
+            'session_id': session_id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/panier/supprimer/<int:id>', methods=['DELETE'])
+@login_required
+@permission_required('gestion_ventes')
+def api_supprimer_du_panier(id):
+    """API AJAX pour supprimer un produit du panier"""
+    try:
+        item_panier = Panier.query.get_or_404(id)
+        db.session.delete(item_panier)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Produit supprimé du panier',
+            'item_id': id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/panier/vider', methods=['DELETE'])
+@login_required
+@permission_required('gestion_ventes')
+def api_vider_panier():
+    """API AJAX pour vider le panier"""
+    try:
+        session_id = request.cookies.get('session_id')
+        if session_id:
+            Panier.query.filter_by(session_id=session_id).delete()
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Panier vidé avec succès'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/panier/contenu')
+@login_required
+@permission_required('gestion_ventes')
+def api_get_panier():
+    """API AJAX pour récupérer le contenu du panier"""
+    try:
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            return jsonify({'success': True, 'panier': [], 'total': 0})
+        
+        panier_items = Panier.query.filter_by(session_id=session_id).all()
+        
+        panier_data = []
+        total = 0
+        
+        for item in panier_items:
+            produit = Produits.query.get(item.produit_id)
+            item_total = item.quantite * item.prix
+            
+            panier_data.append({
+                'id': item.id,
+                'produit_id': item.produit_id,
+                'produit_nom': produit.nom if produit else 'Produit supprimé',
+                'quantite': item.quantite,
+                'prix': item.prix,
+                'total': item_total
+            })
+            
+            total += item_total
+        
+        return jsonify({
+            'success': True,
+            'panier': panier_data,
+            'total': total,
+            'count': len(panier_data)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/produits/search')
+@login_required
+def api_search_produits():
+    """API AJAX pour rechercher des produits"""
+    try:
+        query = request.args.get('q', '').strip()
+        
+        if not query:
+            # Retourner tous les produits ou les plus populaires
+            produits = Produits.query.order_by(Produits.nom.asc()).limit(50).all()
+        else:
+            produits = Produits.query.filter(
+                Produits.nom.ilike(f'%{query}%')
+            ).order_by(Produits.nom.asc()).all()
+        
+        produits_data = []
+        for produit in produits:
+            produits_data.append({
+                'id': produit.id,
+                'nom': produit.nom,
+                'description': produit.description,
+                'prix': float(produit.prix),
+                'prix_achat': float(produit.prix_achat),
+                'quantite': produit.quantite,
+                'quantite_depot': produit.quantite_depot
+            })
+        
+        return jsonify({
+            'success': True,
+            'produits': produits_data,
+            'count': len(produits_data)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'Erreur: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/ventes/finaliser', methods=['POST'])
+@login_required
+@permission_required('gestion_ventes')
+def api_finaliser_vente():
+    """API AJAX pour finaliser une vente"""
+    try:
+        data = request.get_json()
+        
+        nom_client = data.get('nom_client', '').strip()
+        paiement_type = data.get('paiement_type', 'comptant')
+        montant_cash = float(data.get('montant_cash', 0))
+        type_livraison = data.get('type_livraison', 'sur_place')
+        lieu_retrait = data.get('lieu_retrait', 'magasin')
+        
+        if not nom_client:
+            return jsonify({
+                'success': False,
+                'message': 'Le nom du client est requis.'
+            }), 400
+        
+        session_id = request.cookies.get('session_id')
+        if not session_id:
+            return jsonify({
+                'success': False,
+                'message': 'Session invalide.'
+            }), 400
+        
+        panier = Panier.query.filter_by(session_id=session_id).all()
+        
+        if not panier:
+            return jsonify({
+                'success': False,
+                'message': 'Le panier est vide.'
+            }), 400
+        
+        montant_total = sum(item.prix * item.quantite for item in panier)
+        
+        # Détection du type de paiement
+        paiement_credit = (paiement_type == 'credit')
+        a_ete_en_credit = paiement_credit
+        montant_credit = 0
+        
+        if paiement_credit:
+            if montant_cash < 0 or montant_cash > montant_total:
+                return jsonify({
+                    'success': False,
+                    'message': 'Le montant en cash doit être entre 0 et le montant total.'
+                }), 400
+            montant_credit = montant_total - montant_cash
+        else:
+            montant_cash = montant_total
+        
+        # ========== CRÉATION DE LA FACTURE ==========
+        nouvelle_facture = Factures(
+            nom_client=nom_client,
+            montant_total=montant_total,
+            paiement_credit=paiement_credit,
+            a_ete_en_credit=a_ete_en_credit,
+            montant_cash=montant_cash,
+            montant_credit=montant_credit,
+            type_livraison=type_livraison,
+            lieu_retrait=lieu_retrait
+        )
+        db.session.add(nouvelle_facture)
+        db.session.flush()
+        facture_id = nouvelle_facture.id
+        
+        # ========== CRÉATION DES VENTES ==========
+        for item in panier:
+            produit = Produits.query.get_or_404(item.produit_id)
+            
+            if type_livraison == 'sur_place':
+                # Vérifier stock magasin
+                if produit.quantite < item.quantite:
+                    db.session.rollback()
+                    return jsonify({
+                        'success': False,
+                        'message': f'Stock MAGASIN insuffisant pour {produit.nom}! Stock: {produit.quantite}'
+                    }), 400
+                
+                # Déduire du stock magasin
+                produit.quantite -= item.quantite
+                
+                # Enregistrer la transaction
+                transaction = TransactionsProduit(
+                    produit_id=produit.id,
+                    type='sortie',
+                    quantite=item.quantite,
+                    description=f"Vente sur place facture #{facture_id} à {nom_client}"
+                )
+                db.session.add(transaction)
+            
+            # Créer la vente
+            nouvelle_vente = Ventes(
+                produit_id=item.produit_id,
+                facture_id=facture_id,
+                quantite=item.quantite,
+                montant_total=item.prix * item.quantite
+            )
+            db.session.add(nouvelle_vente)
+        
+        # ========== CRÉATION DE LA LIVRAISON SI NÉCESSAIRE ==========
+        livraison_info = None
+        if type_livraison == 'depot':
+            nouvelle_livraison = LivraisonDepot(
+                facture_id=facture_id,
+                vendeur_id=current_user.id,
+                lieu_retrait=lieu_retrait,
+                statut='en_attente'
+            )
+            db.session.add(nouvelle_livraison)
+            db.session.flush()
+            livraison_info = {
+                'id': nouvelle_livraison.id,
+                'statut': nouvelle_livraison.statut
+            }
+        
+        # ========== ENREGISTRER LE PAIEMENT SI CRÉDIT ==========
+        if paiement_credit and montant_cash > 0:
+            premier_paiement = Paiements(
+                facture_id=facture_id,
+                montant=montant_cash,
+                mode_paiement='cash',
+                description=f"Paiement initial pour facture crédit #{facture_id}"
+            )
+            db.session.add(premier_paiement)
+        
+        # ========== VIDER LE PANIER ==========
+        Panier.query.filter_by(session_id=session_id).delete()
+        
+        # ========== COMMIT FINAL ==========
+        db.session.commit()
+        
+        # ========== PRÉPARER LA RÉPONSE ==========
+        ventes_facture = Ventes.query.filter_by(facture_id=facture_id).all()
+        ventes_data = []
+        
+        for vente in ventes_facture:
+            produit = Produits.query.get(vente.produit_id)
+            ventes_data.append({
+                'produit_nom': produit.nom if produit else 'Produit supprimé',
+                'quantite': vente.quantite,
+                'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
+                'montant_total': float(vente.montant_total)
+            })
+        
+        response_data = {
+            'success': True,
+            'message': f'Vente #{facture_id} enregistrée avec succès!',
+            'facture': {
+                'id': facture_id,
+                'nom_client': nom_client,
+                'montant_total': montant_total,
+                'paiement_credit': paiement_credit,
+                'montant_cash': montant_cash,
+                'montant_credit': montant_credit,
+                'type_livraison': type_livraison,
+                'lieu_retrait': lieu_retrait,
+                'date_facture': nouvelle_facture.date_facture.strftime('%d/%m/%Y %H:%M')
+            },
+            'ventes': ventes_data,
+            'livraison_info': livraison_info
+        }
+        
+        # Message personnalisé selon le type
+        if paiement_credit:
+            if type_livraison == 'depot':
+                response_data['message'] = f'Vente crédit #{facture_id} enregistrée! Commande à préparer au dépôt.'
+            else:
+                response_data['message'] = f'Vente crédit #{facture_id} enregistrée avec succès!'
+        else:
+            if type_livraison == 'depot':
+                response_data['message'] = f'Vente comptant #{facture_id} enregistrée! Commande à préparer au dépôt.'
+            else:
+                response_data['message'] = f'Vente comptant #{facture_id} enregistrée avec succès!'
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERREUR API finaliser_vente: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'message': f'Erreur lors de la finalisation: {str(e)}'
+        }), 500
+
+
+# ==================== MODIFIER LA ROUTE VENTES EXISTANTE ====================
+
+@bp.route('/ventes', methods=['GET'])
 @login_required
 @permission_required('gestion_ventes')
 def ventes():
+    """Page principale des ventes - version AJAX"""
+    # Pour la version AJAX, on ne charge plus le panier ici
+    # Il sera chargé via JavaScript après le chargement de la page
+    
+    # On garde juste les produits pour la modale initiale (optionnel)
+    produits = Produits.query.order_by(Produits.nom.asc()).limit(50).all()
+    
+    # On vérifie juste la session
     session_id = request.cookies.get('session_id')
     if not session_id:
         session_id = str(uuid.uuid4())
-        response = make_response(redirect(url_for('routes.ventes')))
-        response.set_cookie('session_id', session_id)
+        response = make_response(render_template('ventes_ajax.html', produits=produits))
+        response.set_cookie('session_id', session_id, max_age=60*60*24*7)  # 7 jours
         return response
-
-    if request.method == 'POST':
-        if 'ajouter_au_panier' in request.form:
-            try:
-                produit_id = int(request.form['produit_id'])
-                quantite = int(request.form['quantite'])
-                prix = float(request.form['prix'])
-
-                if quantite <= 0 or prix <= 0:
-                    flash("La quantité et le prix doivent être des nombres positifs.", "danger")
-                    return redirect(url_for('routes.ventes'))
-
-                produit = Produits.query.get_or_404(produit_id)
-
-                if produit.quantite < quantite:
-                    flash("Quantité insuffisante en stock!", "danger")
-                    return redirect(url_for('routes.ventes'))
-
-                item_panier = Panier.query.filter_by(produit_id=produit_id, session_id=session_id).first()
-                if item_panier:
-                    flash("Ce produit est déjà dans le panier. Supprimez-le avant de l'ajouter à nouveau.", "warning")
-                    return redirect(url_for('routes.ventes'))
-                else:
-                    nouveau_panier = Panier(
-                        produit_id=produit_id,
-                        quantite=quantite,
-                        prix=prix,
-                        session_id=session_id
-                    )
-                    db.session.add(nouveau_panier)
-
-                db.session.commit()
-                flash("Produit ajouté au panier avec succès!", "success")
-                return redirect(url_for('routes.ventes'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Erreur lors de l'ajout au panier: {e}", "danger")
-                return redirect(url_for('routes.ventes'))
-
-        elif 'supprimer_du_panier' in request.form:
-            try:
-                panier_id = int(request.form['panier_id'])
-                item_panier = Panier.query.get_or_404(panier_id)
-                db.session.delete(item_panier)
-                db.session.commit()
-                flash("Produit supprimé du panier avec succès!", "success")
-                return redirect(url_for('routes.ventes'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Erreur lors de la suppression du produit: {e}", "danger")
-                return redirect(url_for('routes.ventes'))
-
-        elif 'vider_panier' in request.form:
-            try:
-                Panier.query.filter_by(session_id=session_id).delete()
-                db.session.commit()
-                flash("Panier vidé avec succès!", "success")
-                return redirect(url_for('routes.ventes'))
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Erreur lors du vidage du panier: {e}", "danger")
-                return redirect(url_for('routes.ventes'))
-
-        elif 'finaliser_vente' in request.form:
-            try:
-                nom_client = request.form['nom_client']
-                paiement_type = request.form.get('paiement_type', 'comptant')
-                montant_cash = float(request.form.get('montant_cash', 0))
-
-                if not nom_client.strip():
-                    flash("Le nom du client ne peut pas être vide.", "danger")
-                    return redirect(url_for('routes.ventes'))
-
-                panier = Panier.query.filter_by(session_id=session_id).all()
-
-                if not panier:
-                    flash("Votre panier est vide!", "danger")
-                    return redirect(url_for('routes.ventes'))
-
-                montant_total = sum(item.prix * item.quantite for item in panier)
-                
-                # Détection du type de paiement
-                paiement_credit = (paiement_type == 'credit')
-                
-                # IMPORTANT : On initialise toujours a_ete_en_credit = paiement_credit
-                # Ce champ servira à garder l'historique même après paiement complet
-                a_ete_en_credit = paiement_credit
-                
-                montant_credit = 0
-
-                if paiement_credit:
-                    if montant_cash < 0 or montant_cash > montant_total:
-                        flash("Le montant en cash doit être entre 0 et le montant total.", "danger")
-                        return redirect(url_for('routes.ventes'))
-                    montant_credit = montant_total - montant_cash
-                else:
-                    # Pour le comptant, tout est payé en cash
-                    montant_cash = montant_total
-
-                # Créer la facture
-                nouvelle_facture = Factures(
-                    nom_client=nom_client,
-                    montant_total=montant_total,
-                    paiement_credit=paiement_credit,
-                    a_ete_en_credit=a_ete_en_credit,  # ← IMPORTANT : Sauvegarde pour historique
-                    montant_cash=montant_cash,
-                    montant_credit=montant_credit
-                )
-                db.session.add(nouvelle_facture)
-                db.session.flush()  # Pour obtenir l'ID de la facture
-
-                # Créer les ventes et mettre à jour les stocks
-                for item in panier:
-                    produit = Produits.query.get_or_404(item.produit_id)
-                    
-                    # Vérifier à nouveau le stock avant de finaliser
-                    if produit.quantite < item.quantite:
-                        flash(f"Stock insuffisant pour {produit.nom}!", "danger")
-                        db.session.rollback()
-                        return redirect(url_for('routes.ventes'))
-                    
-                    # Calculer le prix unitaire réel
-                    prix_unitaire = item.prix
-                    
-                    # Créer la vente
-                    nouvelle_vente = Ventes(
-                        produit_id=item.produit_id,
-                        facture_id=nouvelle_facture.id,
-                        quantite=item.quantite,
-                        montant_total=prix_unitaire * item.quantite
-                    )
-                    db.session.add(nouvelle_vente)
-                    
-                    # Mettre à jour le stock
-                    produit.quantite -= item.quantite
-                    
-                    # Enregistrer la transaction de sortie
-                    transaction = TransactionsProduit(
-                        produit_id=item.produit_id,
-                        type='sortie',
-                        quantite=item.quantite,
-                        description=f"Vente facture #{nouvelle_facture.id} à {nom_client}"
-                    )
-                    db.session.add(transaction)
-
-                # Enregistrer le premier paiement si c'est un crédit avec paiement initial
-                if paiement_credit and montant_cash > 0:
-                    premier_paiement = Paiements(
-                        facture_id=nouvelle_facture.id,
-                        montant=montant_cash,
-                        mode_paiement='cash',
-                        description=f"Paiement initial pour facture crédit #{nouvelle_facture.id}"
-                    )
-                    db.session.add(premier_paiement)
-
-                # Vider le panier après la vente
-                Panier.query.filter_by(session_id=session_id).delete()
-                
-                db.session.commit()
-                
-                # Récupérer la facture et les ventes pour l'affichage
-                facture = nouvelle_facture
-                ventes_facture = Ventes.query.filter_by(facture_id=facture.id).all()
-                
-                # Message de succès différent selon le type de paiement
-                if paiement_credit:
-                    flash(f"Vente crédit #{facture.id} enregistrée avec succès! Montant crédit: {montant_credit:.2f} $", "success")
-                else:
-                    flash(f"Vente comptant #{facture.id} enregistrée avec succès!", "success")
-                
-                # Récupérer les produits et le panier (maintenant vide) pour l'affichage
-                produits = Produits.query.order_by(Produits.nom.asc()).all()
-                panier = []
-                total = 0
-                
-                return render_template('ventes.html', produits=produits, panier=panier, total=total, 
-                                    facture=facture, ventes=ventes_facture, montant_cash=montant_cash, 
-                                    montant_credit=montant_credit)
-
-            except Exception as e:
-                db.session.rollback()
-                flash(f"Erreur lors de la finalisation de la vente: {e}", "danger")
-                return redirect(url_for('routes.ventes'))
-
-    # Récupérer les produits et le panier pour l'affichage
-    produits = Produits.query.order_by(Produits.nom.asc()).all()
-    panier = Panier.query.filter_by(session_id=session_id).all()
-    total = sum(item.prix * item.quantite for item in panier)
-
-    return render_template('ventes.html', produits=produits, panier=panier, total=total, 
-                          facture=None, ventes=[], montant_cash=0, montant_credit=0)
+    
+    return render_template('ventes_ajax.html', produits=produits)
 # ==================== ROUTES DE FACTURES ====================
 
 @bp.route('/factures', methods=['GET'])
@@ -471,7 +684,13 @@ def factures():
     
     factures_list = query.order_by(Factures.date_facture.desc()).all()
     
-    return render_template('factures.html', factures=factures_list, search_term=search_term)
+    # AJOUTER CETTE LIGNE pour récupérer tous les produits
+    produits = Produits.query.order_by(Produits.nom.asc()).all()
+    
+    return render_template('factures.html', 
+                         factures=factures_list, 
+                         search_term=search_term,
+                         produits=produits)  # AJOUTÉ
 
 @bp.route('/factures/<int:id>', methods=['GET'])
 @login_required
@@ -479,7 +698,13 @@ def factures():
 def details_facture(id):
     facture = Factures.query.get_or_404(id)
     ventes = Ventes.query.filter_by(facture_id=id).all()
-    return render_template('details_facture.html', facture=facture, ventes=ventes)
+    
+    # Récupérer les infos de livraison si elles existent
+    livraison_info = None
+    if facture.type_livraison == 'depot':
+        livraison_info = LivraisonDepot.query.filter_by(facture_id=facture.id).first()
+    
+    return render_template('details_facture.html', facture=facture, ventes=ventes, livraison_info=livraison_info)
 
 @bp.route('/factures/<int:id>/details.json')
 @login_required
@@ -495,12 +720,15 @@ def details_facture_json(id):
         'date_facture': facture.date_facture.strftime('%d/%m/%Y %H:%M'),
         'paiement_credit': facture.paiement_credit,
         'montant_cash': float(facture.montant_cash),
-        'montant_credit': float(facture.montant_credit)
+        'montant_credit': float(facture.montant_credit),
+        'type_livraison': facture.type_livraison,
+        'lieu_retrait': facture.lieu_retrait
     }
     
     ventes_data = []
     for vente in ventes:
         ventes_data.append({
+            'produit_id': vente.produit_id,  # AJOUTÉ
             'produit_nom': vente.produit.nom,
             'quantite': vente.quantite,
             'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
@@ -512,160 +740,211 @@ def details_facture_json(id):
         'ventes': ventes_data
     })
 
-@bp.route('/factures/<int:id>/edit')
+@bp.route('/factures/modifier', methods=['POST'])
 @login_required
 @permission_required('gestion_ventes')
-def get_facture_edit_data(id):
-    facture = Factures.query.get_or_404(id)
-    ventes = Ventes.query.filter_by(facture_id=id).all()
-    
-    ventes_data = []
-    for vente in ventes:
-        produit = Produits.query.get(vente.produit_id)
-        ventes_data.append({
-            'id': vente.id,
-            'produit_id': vente.produit_id,
-            'produit_nom': produit.nom if produit else 'Produit supprimé',
-            'quantite': vente.quantite,
-            'prix_unitaire': vente.prix_unitaire,
-            'prix_achat': produit.prix_achat if produit else 0,
-            'montant_total': vente.montant_total,
-            'stock_actuel': produit.quantite if produit else 0
-        })
-    
-    return jsonify({
-        'facture': {
-            'id': facture.id,
-            'nom_client': facture.nom_client,
-            'montant_total': facture.montant_total,
-            'paiement_credit': facture.paiement_credit,
-            'montant_cash': facture.montant_cash,
-            'montant_credit': facture.montant_credit
-        },
-        'ventes': ventes_data
-    })
-
-@bp.route('/factures/<int:id>/imprimer', methods=['GET'])
-@login_required
-@permission_required('gestion_ventes')
-def imprimer_facture(id):
-    facture = Factures.query.get_or_404(id)
-    ventes = Ventes.query.filter_by(facture_id=id).all()
-    return render_template('imprimer_facture.html', facture=facture, ventes=ventes)
-
-@bp.route('/factures/<int:id>/modifier_articles', methods=['POST'])
-@login_required
-@permission_required('gestion_ventes')
-def modifier_articles_facture(id):
+def modifier_facture():
+    """Modifier complètement une facture existante (client, articles, paiement)"""
     try:
         data = request.get_json()
-        facture = Factures.query.get_or_404(id)
         
-        if not data or 'ventes' not in data:
-            return jsonify({
-                'success': False,
-                'message': 'Données invalides'
-            })
+        facture_id = data['facture_id']
+        nom_client = data['nom_client'].strip()
+        mode_paiement = data['mode_paiement']
+        montant_cash = float(data['montant_cash'])
+        type_livraison = data.get('type_livraison', 'sur_place')
+        lieu_retrait = data.get('lieu_retrait', 'magasin')
+        notes = data.get('notes', '')
+        articles = data['articles']
         
-        total_facture = 0
-        modifications = []
+        facture = Factures.query.get_or_404(facture_id)
         
-        for vente_data in data['ventes']:
-            vente_id = vente_data.get('id')
-            nouvelle_quantite = int(vente_data.get('quantite', 0))
-            nouveau_prix = float(vente_data.get('prix', 0))
+        # Récupérer les ventes existantes
+        ventes_existantes = Ventes.query.filter_by(facture_id=facture_id).all()
+        
+        # Sauvegarder l'ancien état pour référence
+        ancien_etat = {
+            'nom_client': facture.nom_client,
+            'montant_total': float(facture.montant_total),
+            'paiement_credit': facture.paiement_credit,
+            'montant_cash': float(facture.montant_cash),
+            'montant_credit': float(facture.montant_credit),
+            'type_livraison': facture.type_livraison,
+            'lieu_retrait': facture.lieu_retrait,
+            'ventes': [{
+                'produit_id': v.produit_id,
+                'quantite': v.quantite,
+                'montant_total': float(v.montant_total)
+            } for v in ventes_existantes]
+        }
+        
+        # Calculer le nouveau montant total
+        nouveau_montant_total = sum(article['montant_total'] for article in articles)
+        
+        # Calculer les nouveaux montants de paiement
+        if mode_paiement == 'credit':
+            if montant_cash > nouveau_montant_total:
+                return jsonify({
+                    'success': False,
+                    'message': f'Le montant cash ({montant_cash}) ne peut pas dépasser le montant total ({nouveau_montant_total})'
+                })
             
-            if vente_id and nouvelle_quantite > 0:
-                vente = Ventes.query.get(vente_id)
-                if vente and vente.facture_id == id:
-                    produit = Produits.query.get(vente.produit_id)
-                    
-                    if not produit:
-                        continue
-                    
-                    ancienne_quantite = vente.quantite
-                    ancien_prix_unitaire = vente.prix_unitaire
-                    difference = nouvelle_quantite - ancienne_quantite
-                    
-                    # Si la quantité augmente, vérifier le stock
-                    if difference > 0 and produit.quantite < difference:
-                        return jsonify({
-                            'success': False,
-                            'message': f'Stock insuffisant pour {produit.nom}. Stock actuel: {produit.quantite}'
-                        })
-                    
-                    # Si le prix change, vérifier qu'il n'est pas inférieur au prix d'achat
-                    if nouveau_prix > 0 and nouveau_prix != ancien_prix_unitaire:
-                        # Vérifier que le nouveau prix n'est pas inférieur au prix d'achat
-                        if nouveau_prix < produit.prix_achat:
-                            return jsonify({
-                                'success': False,
-                                'message': f'Le prix de vente ({nouveau_prix}) ne peut pas être inférieur au prix d\'achat ({produit.prix_achat}) pour {produit.nom}'
-                            })
-                        # Mettre à jour le prix unitaire
-                        vente.prix_unitaire = nouveau_prix
-                    
-                    # Calculer le nouveau montant
-                    prix_unitaire = vente.prix_unitaire
-                    nouveau_montant = prix_unitaire * nouvelle_quantite
-                    
-                    # Mettre à jour le stock
-                    produit.quantite -= difference
-                    
-                    # Mettre à jour la vente
-                    vente.quantite = nouvelle_quantite
-                    vente.montant_total = nouveau_montant
-                    
-                    total_facture += nouveau_montant
-                    
-                    # Enregistrer la modification pour le log
-                    modifications.append({
-                        'produit': produit.nom,
-                        'ancienne_quantite': ancienne_quantite,
-                        'nouvelle_quantite': nouvelle_quantite,
-                        'ancien_prix': ancien_prix_unitaire,
-                        'nouveau_prix': prix_unitaire,
-                        'ancien_montant': ancien_prix_unitaire * ancienne_quantite,
-                        'nouveau_montant': nouveau_montant
-                    })
-        
-        # Mettre à jour le montant total de la facture
-        ancien_total = facture.montant_total
-        facture.montant_total = total_facture
-        
-        # Ajuster les montants cash et crédit
-        if not facture.paiement_credit:
-            facture.montant_cash = total_facture
-            facture.montant_credit = 0
+            nouveau_montant_credit = nouveau_montant_total - montant_cash
+            paiement_credit = True
         else:
-            # Pour le crédit, ajuster proportionnellement
-            ratio = total_facture / ancien_total if ancien_total > 0 else 1
-            facture.montant_cash = round(facture.montant_cash * ratio, 2)
-            facture.montant_credit = total_facture - facture.montant_cash
+            montant_cash = nouveau_montant_total
+            nouveau_montant_credit = 0
+            paiement_credit = False
+        
+        # DÉBUT DE LA TRANSACTION
+        db.session.begin_nested()
+        
+        try:
+            # 1. Restaurer le stock des anciennes ventes
+            for vente in ventes_existantes:
+                produit = Produits.query.get_or_404(vente.produit_id)
+                
+                # Vérifier le type de livraison original
+                if facture.type_livraison == 'sur_place':
+                    # Ajouter au stock magasin
+                    produit.quantite += vente.quantite
+                    
+                    # Enregistrer la transaction d'annulation
+                    transaction = TransactionsProduit(
+                        produit_id=produit.id,
+                        type='entree',
+                        quantite=vente.quantite,
+                        description=f"Annulation modification facture #{facture_id}"
+                    )
+                    db.session.add(transaction)
+                else:
+                    # Ajouter au stock dépôt
+                    produit.quantite_depot += vente.quantite
+                    
+                    # Enregistrer la transaction de dépôt
+                    transaction_depot = TransactionDepot(
+                        produit_id=produit.id,
+                        type_transaction='entree',
+                        quantite=vente.quantite,
+                        description=f"Annulation modification facture #{facture_id}"
+                    )
+                    db.session.add(transaction_depot)
             
-            # Si le crédit devient négatif, corriger
-            if facture.montant_credit < 0:
-                facture.montant_cash = total_facture
-                facture.montant_credit = 0
-                facture.paiement_credit = False
-        
-        db.session.commit()
-        
+            # 2. Supprimer les anciennes ventes
+            Ventes.query.filter_by(facture_id=facture_id).delete()
+            
+            # 3. Ajouter les nouvelles ventes
+            for article in articles:
+                produit = Produits.query.get_or_404(article['produit_id'])
+                
+                # Vérifier le stock selon le type de livraison
+                if type_livraison == 'sur_place':
+                    if produit.quantite < article['quantite']:
+                        raise ValueError(f"Stock MAGASIN insuffisant pour {produit.nom}! Stock: {produit.quantite}")
+                    
+                    # Déduire du stock magasin
+                    produit.quantite -= article['quantite']
+                    
+                    # Enregistrer la transaction
+                    transaction = TransactionsProduit(
+                        produit_id=produit.id,
+                        type='sortie',
+                        quantite=article['quantite'],
+                        description=f"Vente modifiée facture #{facture_id} à {nom_client}"
+                    )
+                    db.session.add(transaction)
+                else:
+                    if produit.quantite_depot < article['quantite']:
+                        raise ValueError(f"Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot}")
+                    
+                    # Déduire du stock dépôt
+                    produit.quantite_depot -= article['quantite']
+                    
+                    # Enregistrer la transaction de dépôt
+                    transaction_depot = TransactionDepot(
+                        produit_id=produit.id,
+                        type_transaction='sortie',
+                        quantite=article['quantite'],
+                        description=f"Vente modifiée facture #{facture_id} à {nom_client}"
+                    )
+                    db.session.add(transaction_depot)
+                
+                # Créer la nouvelle vente
+                nouvelle_vente = Ventes(
+                    produit_id=article['produit_id'],
+                    facture_id=facture_id,
+                    quantite=article['quantite'],
+                    montant_total=article['montant_total']
+                )
+                db.session.add(nouvelle_vente)
+            
+            # 4. Mettre à jour la facture
+            facture.nom_client = nom_client
+            facture.montant_total = nouveau_montant_total
+            facture.paiement_credit = paiement_credit
+            facture.montant_cash = montant_cash
+            facture.montant_credit = nouveau_montant_credit
+            facture.type_livraison = type_livraison
+            facture.lieu_retrait = lieu_retrait
+            
+            # Mettre à jour le flag a_ete_en_credit
+            if paiement_credit:
+                facture.a_ete_en_credit = True
+            
+            # Ajouter des notes si fournies
+            if notes:
+                # Vous pourriez stocker cela dans un champ séparé ou dans une table d'historique
+                pass
+            
+            # 5. Mettre à jour la livraison si nécessaire
+            if type_livraison == 'depot':
+                livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
+                if livraison:
+                    livraison.lieu_retrait = lieu_retrait
+                    # Réinitialiser le statut si la livraison était déjà livrée
+                    if livraison.statut == 'livree':
+                        livraison.statut = 'en_attente'
+                        livraison.date_livree = None
+                else:
+                    # Créer une nouvelle livraison
+                    nouvelle_livraison = LivraisonDepot(
+                        facture_id=facture_id,
+                        vendeur_id=current_user.id,
+                        lieu_retrait=lieu_retrait,
+                        statut='en_attente'
+                    )
+                    db.session.add(nouvelle_livraison)
+            
+            # COMMIT DE LA TRANSACTION
+            db.session.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': f'Facture #{facture_id} modifiée avec succès!',
+                'nouveau_total': nouveau_montant_total
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+            
+    except ValueError as e:
         return jsonify({
-            'success': True,
-            'message': 'Articles modifiés avec succès',
-            'nouveau_total': total_facture,
-            'modifications': modifications
-        })
+            'success': False,
+            'message': str(e)
+        }), 400
         
     except Exception as e:
         db.session.rollback()
-        print(f"Erreur dans modifier_articles_facture: {str(e)}")
+        print(f"ERREUR modification facture: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
         return jsonify({
             'success': False,
-            'message': f'Erreur: {str(e)}'
+            'message': f'Erreur lors de la modification: {str(e)}'
         }), 500
-
+    
 # ==================== ROUTES DE FACTURES CREDIT ====================
 
 @bp.route('/factures_credit', methods=['GET'])
@@ -675,15 +954,14 @@ def factures_credit():
     search_term = request.args.get('search', '')
     
     # IMPORTANT : Récupérer TOUTES les factures qui ont été en crédit
-    # On utilise a_ete_en_credit au lieu de paiement_credit
     if search_term:
         factures = Factures.query.filter(
-            Factures.a_ete_en_credit == True,  # ← CECI EST LA CLÉ
+            Factures.a_ete_en_credit == True,
             Factures.nom_client.ilike(f'%{search_term}%')
         ).order_by(Factures.date_facture.desc()).all()
     else:
         factures = Factures.query.filter_by(
-            a_ete_en_credit=True  # ← CECI EST LA CLÉ
+            a_ete_en_credit=True
         ).order_by(Factures.date_facture.desc()).all()
     
     # Calculer les totaux
@@ -735,14 +1013,11 @@ def marquer_facture_payee():
         facture.montant_cash += montant_paye
         facture.montant_credit -= montant_paye
         
-        # IMPORTANT : NE PAS changer a_ete_en_credit
-        # La facture reste dans l'historique des crédits
-        
         # Si le crédit est entièrement payé, on peut changer paiement_credit
         if facture.montant_credit <= 0:
             facture.montant_credit = 0
-            facture.paiement_credit = False  # Marquer comme non crédit actif
-            flash(f"Facture #{facture_id} complètement payée! (reste visible pour historique)", "success")
+            facture.paiement_credit = False
+            flash(f"Facture #{facture_id} complètement payée!", "success")
         else:
             flash(f"Paiement partiel enregistré pour la facture #{facture_id}. Reste: {facture.montant_credit:.2f} $", "warning")
         
@@ -753,6 +1028,7 @@ def marquer_facture_payee():
         flash(f"Erreur lors de l'enregistrement du paiement: {e}", "danger")
     
     return redirect(url_for('routes.factures_credit'))
+
 @bp.route('/factures/<int:facture_id>/paiements')
 @login_required
 @permission_required('gestion_ventes')
@@ -1166,13 +1442,13 @@ DEFAULT_ROLE_PERMISSIONS = {
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
         'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 'voir_benefice', 
         'gestion_depenses_ordinaires', 'gestion_depenses_recurentes', 'voir_historique_vente', 
-        'gestion_transactions_stock_boutique'
+        'gestion_transactions_stock_boutique', 'gestion_livraisons'  # NOUVEAU
     ],
     'Financier': [
         'gestion_banque', 'gestion_caise', 'gestion_depenses_ordinaires', 'voir_historique_vente'
     ],
     'Amagasinier': [
-        'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique'
+        'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'gestion_livraisons'  # NOUVEAU
     ],
     'vendeur': [
         'voir_stock_depot', 'voir_stock_boutique', 'gestion_ventes', 'voir_historique_vente', 'gestion_transactions_stock_boutique'
@@ -1191,7 +1467,7 @@ def gestion_utilisateurs():
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
         'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 'voir_benefice', 
         'gestion_depenses_ordinaires', 'gestion_depenses_recurentes', 'voir_historique_vente', 
-        'gestion_transactions_stock_boutique'
+        'gestion_transactions_stock_boutique', 'gestion_livraisons'  # NOUVEAU
     ]
 
     if request.method == 'POST':
@@ -1383,6 +1659,254 @@ def modifier_produit_en_route(id):
         return redirect(url_for('routes.produits_en_route'))
     produits = Produits.query.all()
     return render_template('modifier_produit_en_route.html', produit_en_route=produit_en_route, produits=produits)
+
+# ==================== ROUTES DE GESTION DES LIVRAISONS ====================
+@bp.route('/gestion_livraisons')
+@login_required
+@permission_required('gestion_depot')
+def gestion_livraisons():
+    """Page pour gérer les livraisons à partir du dépôt"""
+    
+    # Filtrer par statut si demandé
+    statut_filter = request.args.get('statut', 'en_attente')  # Par défaut: seulement en attente
+    
+    query = LivraisonDepot.query
+    
+    if statut_filter != 'tous':
+        query = query.filter_by(statut=statut_filter)
+    
+    # Trier par date de commande (les plus anciennes en premier)
+    livraisons = query.order_by(LivraisonDepot.date_commande.asc()).all()
+    
+    # Compter par statut
+    stats = {
+        'en_attente': LivraisonDepot.query.filter_by(statut='en_attente').count(),
+        'en_preparation': LivraisonDepot.query.filter_by(statut='en_preparation').count(),
+        'livree': LivraisonDepot.query.filter_by(statut='livree').count(),
+        'annulee': LivraisonDepot.query.filter_by(statut='annulee').count(),
+        'tous': LivraisonDepot.query.count()
+    }
+    
+    return render_template('gestion_livraisons.html',
+                         livraisons=livraisons,
+                         stats=stats,
+                         statut_filter=statut_filter)
+@bp.route('/livraison/<int:id>', methods=['GET', 'POST'])
+@login_required
+@permission_required('gestion_depot')
+def details_livraison(id):
+    """Détails et gestion d'une livraison spécifique"""
+    
+    livraison = LivraisonDepot.query.get_or_404(id)
+    facture = livraison.facture
+    ventes = Ventes.query.filter_by(facture_id=facture.id).all()
+    # Supprimer cette ligne: produits_livraison = ProduitLivraison.query.filter_by(livraison_id=id).all()
+    
+    if request.method == 'POST':
+        action = request.form.get('action')
+        
+        try:
+            if action == 'preparer_livraison':
+                # Commencer la préparation
+                # VÉRIFIER LE STOCK DU DÉPÔT AVANT DE COMMENCER
+                stock_insuffisant = False
+                produits_manquants = []
+                
+                for vente in ventes:
+                    produit = Produits.query.get_or_404(vente.produit_id)
+                    
+                    # Vérifier le stock DÉPÔT
+                    if produit.quantite_depot < vente.quantite:
+                        stock_insuffisant = True
+                        produits_manquants.append({
+                            'nom': produit.nom,
+                            'stock_depot': produit.quantite_depot,
+                            'quantite_requise': vente.quantite
+                        })
+                
+                if stock_insuffisant:
+                    message = "Stock DÉPÔT insuffisant pour préparer la livraison:\n"
+                    for produit in produits_manquants:
+                        message += f"- {produit['nom']}: besoin {produit['quantite_requise']}, disponible {produit['stock_depot']}\n"
+                    flash(message, "danger")
+                    return redirect(url_for('routes.details_livraison', id=id))
+                
+                # Si stock suffisant, commencer la préparation
+                livraison.statut = 'en_preparation'
+                livraison.prepareur_id = current_user.id
+                livraison.date_preparation = datetime.utcnow()
+                livraison.notes = request.form.get('notes', '')
+                
+                db.session.commit()
+                flash("Livraison en préparation!", "success")
+                
+            elif action == 'confirmer_livraison':
+                # Confirmer ET livrer en une seule étape
+                # Vérifier à nouveau le stock DÉPÔT
+                for vente in ventes:
+                    produit = Produits.query.get_or_404(vente.produit_id)
+                    
+                    # Vérifier le stock DÉPÔT
+                    if produit.quantite_depot < vente.quantite:
+                        flash(f"Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot}", "danger")
+                        return redirect(url_for('routes.details_livraison', id=id))
+                
+                # Si tout est bon, déduire du stock DÉPÔT
+                for vente in ventes:
+                    produit = Produits.query.get_or_404(vente.produit_id)
+                    
+                    # Déduire du stock DÉPÔT
+                    produit.quantite_depot -= vente.quantite
+                    
+                    # Enregistrer la sortie du dépôt
+                    transaction_depot = TransactionDepot(
+                        produit_id=produit.id,
+                        type_transaction='sortie',
+                        quantite=vente.quantite,
+                        description=f"Livraison client - Facture #{facture.id} pour {facture.nom_client}"
+                    )
+                    db.session.add(transaction_depot)
+                
+                # Mettre à jour la livraison
+                livraison.statut = 'livree'
+                livraison.date_livree = datetime.utcnow()
+                frais_livraison = request.form.get('frais_livraison', 0)
+                if frais_livraison:
+                    livraison.frais_livraison = float(frais_livraison)
+                
+                db.session.commit()
+                flash("Livraison confirmée! Stock déduit du dépôt.", "success")
+                
+            elif action == 'annuler_livraison':
+                # Annuler la livraison
+                livraison.statut = 'annulee'
+                raison = request.form.get('raison', '')
+                livraison.notes = f"Annulée: {raison}"
+                
+                db.session.commit()
+                flash("Livraison annulée!", "warning")
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erreur: {str(e)}", "danger")
+        
+        return redirect(url_for('routes.details_livraison', id=id))
+    
+    # Vérifier le stock du dépôt pour affichage
+    stock_insuffisant = False
+    produits_avec_stock = []
+    
+    for vente in ventes:
+        produit = Produits.query.get_or_404(vente.produit_id)
+        suffisant = produit.quantite_depot >= vente.quantite
+        
+        if not suffisant:
+            stock_insuffisant = True
+            
+        produits_avec_stock.append({
+            'produit': produit,
+            'vente': vente,
+            'stock_depot': produit.quantite_depot,
+            'suffisant': suffisant,
+            'manquant': vente.quantite - produit.quantite_depot if not suffisant else 0
+        })
+    
+    return render_template('details_livraison.html',
+                         livraison=livraison,
+                         facture=facture,
+                         ventes=ventes,
+                         produits_avec_stock=produits_avec_stock,
+                         stock_insuffisant=stock_insuffisant)
+
+@bp.route('/api/livraisons/statut/<int:id>', methods=['PUT'])
+@login_required
+@permission_required('gestion_depot')
+def update_statut_livraison(id):
+    """API pour mettre à jour le statut d'une livraison"""
+    
+    try:
+        data = request.get_json()
+        livraison = LivraisonDepot.query.get_or_404(id)
+        
+        nouveau_statut = data.get('statut')
+        notes = data.get('notes', '')
+        
+        if nouveau_statut not in ['en_attente', 'en_preparation', 'livree', 'annulee']:
+            return jsonify({'success': False, 'message': 'Statut invalide'}), 400
+        
+        # Vérifier le stock si on passe en préparation ou livrée
+        if nouveau_statut in ['en_preparation', 'livree']:
+            ventes = Ventes.query.filter_by(facture_id=livraison.facture_id).all()
+            
+            for vente in ventes:
+                produit = Produits.query.get_or_404(vente.produit_id)
+                
+                if produit.quantite_depot < vente.quantite:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Stock DÉPÔT insuffisant pour {produit.nom}. Disponible: {produit.quantite_depot}, Requis: {vente.quantite}'
+                    }), 400
+        
+        livraison.statut = nouveau_statut
+        livraison.notes = notes
+        
+        # Mettre à jour les dates selon le statut
+        if nouveau_statut == 'en_preparation':
+            livraison.date_preparation = datetime.utcnow()
+            livraison.prepareur_id = current_user.id
+            
+        elif nouveau_statut == 'livree':
+            livraison.date_livree = datetime.utcnow()
+            
+            # Déduire du stock DÉPÔT
+            ventes = Ventes.query.filter_by(facture_id=livraison.facture_id).all()
+            for vente in ventes:
+                produit = Produits.query.get_or_404(vente.produit_id)
+                produit.quantite_depot -= vente.quantite
+                
+                # Enregistrer la transaction
+                transaction = TransactionDepot(
+                    produit_id=produit.id,
+                    type_transaction='sortie',
+                    quantite=vente.quantite,
+                    description=f"Livraison API - Facture #{livraison.facture_id}"
+                )
+                db.session.add(transaction)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Statut mis à jour: {nouveau_statut}',
+            'statut': nouveau_statut
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
+    
+@bp.route('/livraisons_client')
+@login_required
+@permission_required('gestion_ventes')
+def livraisons_client():
+    """Page pour voir l'état des livraisons (pour les vendeurs/clients)"""
+    
+    # Filtrer par nom client si fourni
+    nom_client = request.args.get('client', '')
+    
+    query = LivraisonDepot.query.join(Factures)
+    
+    if nom_client:
+        query = query.filter(Factures.nom_client.ilike(f'%{nom_client}%'))
+    
+    # Les livraisons non livrées
+    livraisons = query.filter(
+        LivraisonDepot.statut.in_(['en_attente', 'en_preparation', 'prete'])
+    ).order_by(LivraisonDepot.date_commande.desc()).all()
+    
+    return render_template('livraisons_client.html',
+                         livraisons=livraisons,
+                         nom_client=nom_client)
 
 # ==================== ROUTE DE SAUVEGARDE ====================
 

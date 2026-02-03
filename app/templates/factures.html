@@ -10,7 +10,7 @@
             <h1 class="h4 mb-1 text-dark fw-bold">
                 <i class="fas fa-file-invoice me-2 text-primary"></i>Gestion des Factures
             </h1>
-            <p class="text-muted small mb-0">Consultation et gestion de l'historique des factures</p>
+            <p class="text-muted small mb-0">Consultation, modification et gestion de l'historique des factures</p>
         </div>
         <div class="d-flex align-items-center">
             <span class="badge bg-primary fs-6">
@@ -133,16 +133,7 @@
                             data-id="{{ facture.id }}" 
                             data-client="{{ facture.nom_client|lower }}" 
                             data-date="{{ facture.date_facture.strftime('%Y-%m-%d') }}"
-                            data-montant="{{ facture.montant_total }}"
-                            data-facture='{{ {
-                                "id": facture.id,
-                                "nom_client": facture.nom_client,
-                                "montant_total": facture.montant_total,
-                                "date_facture": facture.date_facture.strftime("%d/%m/%Y %H:%M"),
-                                "paiement_credit": facture.paiement_credit,
-                                "montant_cash": facture.montant_cash,
-                                "montant_credit": facture.montant_credit
-                            }|tojson }}'>
+                            data-montant="{{ facture.montant_total }}">
                             <td class="text-center fw-bold text-primary">{{ facture.id }}</td>
                             <td>
                                 <div class="d-flex align-items-center">
@@ -172,21 +163,17 @@
                             </td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm" role="group">
-                                    <button class="btn btn-outline-primary view-details" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#detailsFactureModal"
+                                    <button class="btn btn-outline-primary view-details-btn"
                                             data-facture-id="{{ facture.id }}"
                                             title="Voir les détails">
                                         <i class="fas fa-eye"></i>
                                     </button>
                                     <button class="btn btn-outline-warning edit-facture-btn"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#editFactureModal"
                                             data-facture-id="{{ facture.id }}"
                                             title="Modifier la facture">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button class="btn btn-outline-secondary imprimer-facture-btn"
+                                    <button class="btn btn-outline-secondary print-facture-btn"
                                             data-facture-id="{{ facture.id }}"
                                             title="Imprimer la facture">
                                         <i class="fas fa-print"></i>
@@ -265,7 +252,7 @@
 
 <!-- Modale pour les détails de la facture -->
 <div class="modal fade" id="detailsFactureModal" tabindex="-1" aria-labelledby="detailsFactureModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="detailsFactureModalLabel">
@@ -282,7 +269,7 @@
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i> Fermer
                 </button>
-                <button type="button" class="btn btn-primary" onclick="imprimerFactureFromModal()">
+                <button type="button" class="btn btn-primary" id="printFromDetailsBtn">
                     <i class="fas fa-print me-1"></i> Imprimer
                 </button>
             </div>
@@ -290,58 +277,42 @@
     </div>
 </div>
 
-<!-- Modale pour l'édition de la facture -->
+<!-- Modale pour la modification COMPLÈTE de la facture -->
 <div class="modal fade" id="editFactureModal" tabindex="-1" aria-labelledby="editFactureModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-warning text-white">
                 <h5 class="modal-title" id="editFactureModalLabel">
-                    <i class="fas fa-edit me-2"></i> Modifier la Facture
+                    <i class="fas fa-edit me-2"></i> Modifier la Facture #<span id="editFactureNumber"></span>
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="editFactureForm" method="POST" action="">
-                <div class="modal-body">
-                    <input type="hidden" id="edit_facture_id" name="facture_id">
+            <div class="modal-body">
+                <form id="editFactureForm" method="POST">
+                    <input type="hidden" id="editFactureId" name="facture_id">
                     
-                    <!-- Informations générales -->
                     <div class="row mb-4">
                         <div class="col-md-6">
-                            <div class="card h-100">
+                            <div class="card">
                                 <div class="card-header bg-light">
-                                    <h6 class="card-title mb-0"><i class="fas fa-info-circle me-2"></i>Informations Générales</h6>
+                                    <h6 class="card-title mb-0"><i class="fas fa-user me-2"></i>Informations Client</h6>
                                 </div>
                                 <div class="card-body">
                                     <div class="mb-3">
-                                        <label for="edit_nom_client" class="form-label fw-semibold">Nom du client *</label>
-                                        <input type="text" class="form-control" id="edit_nom_client" name="nom_client" required>
+                                        <label for="editNomClient" class="form-label fw-semibold">Nom du Client *</label>
+                                        <input type="text" class="form-control" id="editNomClient" name="nom_client" required>
                                     </div>
-                                    
-                                    <div class="mb-3">
-                                        <label for="edit_montant_total" class="form-label fw-semibold">Montant total</label>
-                                        <div class="input-group">
-                                            <input type="text" class="form-control fw-bold text-primary" id="edit_montant_total" readonly>
-                                            <span class="input-group-text">$</span>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="editTypeLivraison" class="form-label fw-semibold">Type de Livraison</label>
+                                            <select class="form-select" id="editTypeLivraison" name="type_livraison">
+                                                <option value="sur_place">Sur Place</option>
+                                                <option value="depot">Dépôt</option>
+                                            </select>
                                         </div>
-                                    </div>
-                                    
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold">Mode de paiement</label>
-                                        <div class="form-check mb-2">
-                                            <input class="form-check-input" type="radio" name="paiement_type" id="edit_paiement_comptant" value="comptant" checked>
-                                            <label class="form-check-label" for="edit_paiement_comptant">
-                                                <span class="badge bg-success">
-                                                    <i class="fas fa-money-bill-wave me-1"></i> Comptant
-                                                </span>
-                                            </label>
-                                        </div>
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="radio" name="paiement_type" id="edit_paiement_credit" value="credit">
-                                            <label class="form-check-label" for="edit_paiement_credit">
-                                                <span class="badge bg-warning text-dark">
-                                                    <i class="fas fa-credit-card me-1"></i> Crédit
-                                                </span>
-                                            </label>
+                                        <div class="col-md-6">
+                                            <label for="editLieuRetrait" class="form-label fw-semibold">Lieu de Retrait</label>
+                                            <input type="text" class="form-control" id="editLieuRetrait" name="lieu_retrait" placeholder="Magasin">
                                         </div>
                                     </div>
                                 </div>
@@ -349,53 +320,43 @@
                         </div>
                         
                         <div class="col-md-6">
-                            <div class="card h-100">
+                            <div class="card">
                                 <div class="card-header bg-light">
-                                    <h6 class="card-title mb-0"><i class="fas fa-money-bill-wave me-2"></i>Détails Paiement</h6>
+                                    <h6 class="card-title mb-0"><i class="fas fa-money-bill-wave me-2"></i>Informations Paiement</h6>
                                 </div>
                                 <div class="card-body">
-                                    <!-- Section Cash (toujours visible) -->
-                                    <div class="mb-3" id="edit_cash_section">
-                                        <label for="edit_montant_cash" class="form-label fw-semibold">
-                                            <i class="fas fa-money-bill-wave text-success me-1"></i>Montant payé en cash
-                                        </label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" id="edit_montant_cash" name="montant_cash" step="0.01" min="0" required>
-                                            <span class="input-group-text">$</span>
-                                        </div>
-                                        <small class="form-text text-muted">Montant déjà payé par le client</small>
+                                    <div class="mb-3">
+                                        <label for="editModePaiement" class="form-label fw-semibold">Mode de Paiement *</label>
+                                        <select class="form-select" id="editModePaiement" name="mode_paiement" required>
+                                            <option value="comptant">Comptant</option>
+                                            <option value="credit">Crédit</option>
+                                        </select>
                                     </div>
                                     
-                                    <!-- Section Crédit (seulement pour paiement crédit) -->
-                                    <div class="mb-3" id="edit_credit_section" style="display: none;">
-                                        <label for="edit_montant_credit" class="form-label fw-semibold">
-                                            <i class="fas fa-credit-card text-warning me-1"></i>Montant restant (crédit)
-                                        </label>
-                                        <div class="input-group">
-                                            <input type="number" class="form-control" id="edit_montant_credit" name="montant_credit" step="0.01" min="0">
-                                            <span class="input-group-text">$</span>
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Total Facture</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control bg-light" id="editMontantTotal" 
+                                                       name="montant_total" step="0.01" min="0" readonly>
+                                                <span class="input-group-text">$</span>
+                                            </div>
                                         </div>
-                                        <small class="form-text text-muted">Montant restant à payer</small>
-                                    </div>
-                                    
-                                    <!-- Affichage du solde -->
-                                    <div class="alert alert-info mt-3" id="edit_balance_alert" style="display: none;">
-                                        <div class="d-flex justify-content-between">
-                                            <span>Total:</span>
-                                            <strong id="edit_total_amount">0.00 $</strong>
+                                        <div class="col-md-4">
+                                            <label for="editMontantCash" class="form-label fw-semibold">Montant Cash *</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control" id="editMontantCash" 
+                                                       name="montant_cash" step="0.01" min="0" required>
+                                                <span class="input-group-text">$</span>
+                                            </div>
                                         </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Cash:</span>
-                                            <strong id="edit_cash_amount" class="text-success">0.00 $</strong>
-                                        </div>
-                                        <div class="d-flex justify-content-between">
-                                            <span>Crédit:</span>
-                                            <strong id="edit_credit_amount" class="text-warning">0.00 $</strong>
-                                        </div>
-                                        <hr class="my-2">
-                                        <div class="d-flex justify-content-between fw-bold">
-                                            <span>Solde:</span>
-                                            <span id="edit_balance" class="text-primary">0.00 $</span>
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Reste Crédit</label>
+                                            <div class="input-group">
+                                                <input type="number" class="form-control bg-light" id="editMontantCredit" 
+                                                       name="montant_credit" step="0.01" min="0" readonly>
+                                                <span class="input-group-text">$</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -403,73 +364,120 @@
                         </div>
                     </div>
                     
-                    <!-- Articles de la facture -->
-                    <div class="card">
+                    <!-- Section des articles -->
+                    <div class="card mb-4">
                         <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                            <h6 class="card-title mb-0"><i class="fas fa-boxes me-2"></i>Articles</h6>
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="openEditArticlesModal()">
-                                <i class="fas fa-edit me-1"></i> Modifier les articles
+                            <h6 class="card-title mb-0"><i class="fas fa-boxes me-2"></i>Articles de la Facture</h6>
+                            <button type="button" class="btn btn-sm btn-primary" id="addArticleBtn">
+                                <i class="fas fa-plus me-1"></i> Ajouter Article
                             </button>
                         </div>
                         <div class="card-body">
                             <div class="table-responsive">
-                                <table class="table table-sm">
-                                    <thead>
+                                <table class="table table-hover" id="articlesTable">
+                                    <thead class="table-dark">
                                         <tr>
-                                            <th>Produit</th>
-                                            <th class="text-center">Quantité</th>
-                                            <th class="text-end">Prix unitaire</th>
-                                            <th class="text-end">Total</th>
+                                            <th width="5%">#</th>
+                                            <th width="40%">Produit</th>
+                                            <th width="15%" class="text-center">Quantité</th>
+                                            <th width="15%" class="text-end">Prix Unitaire</th>
+                                            <th width="15%" class="text-end">Total</th>
+                                            <th width="10%" class="text-center">Actions</th>
                                         </tr>
                                     </thead>
-                                    <tbody id="edit_articles_body">
-                                        <!-- Les articles seront chargés dynamiquement -->
+                                    <tbody id="articlesBody">
+                                        <!-- Les articles seront ajoutés dynamiquement -->
                                     </tbody>
                                     <tfoot>
-                                        <tr class="table-light">
-                                            <td colspan="3" class="text-end fw-bold">Total:</td>
-                                            <td class="text-end fw-bold" id="edit_articles_total">0.00 $</td>
+                                        <tr class="table-success">
+                                            <td colspan="4" class="text-end fw-bold">Total Général:</td>
+                                            <td class="text-end fw-bold" id="editTotalGeneral">0.00 $</td>
+                                            <td></td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
+                            
+                            <!-- Template pour nouvelle ligne d'article -->
+                            <template id="articleTemplate">
+                                <tr class="article-row" data-index="">
+                                    <td class="text-center align-middle article-index"></td>
+                                    <td>
+                                        <select class="form-select form-select-sm produit-select" required>
+                                            <option value="">Sélectionner un produit</option>
+                                            {% for produit in produits %}
+                                            <option value="{{ produit.id }}" 
+                                                    data-prix="{{ produit.prix }}" 
+                                                    data-quantite-magasin="{{ produit.quantite }}"
+                                                    data-quantite-depot="{{ produit.quantite_depot }}">
+                                                {{ produit.nom }} (Stock M: {{ produit.quantite }}, D: {{ produit.quantite_depot }})
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="text-muted small mt-1 stock-info"></div>
+                                    </td>
+                                    <td>
+                                        <input type="number" class="form-control form-control-sm text-center quantite-input" 
+                                               min="1" step="1" value="1" required>
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" class="form-control text-end prix-input" 
+                                                   step="0.01" min="0" required>
+                                            <span class="input-group-text">$</span>
+                                        </div>
+                                    </td>
+                                    <td class="text-end align-middle article-total fw-bold">0.00 $</td>
+                                    <td class="text-center align-middle">
+                                        <button type="button" class="btn btn-sm btn-danger remove-article-btn">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            </template>
                         </div>
                     </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                        <i class="fas fa-times me-1"></i> Annuler
-                    </button>
-                    <button type="submit" class="btn btn-warning">
-                        <i class="fas fa-save me-1"></i> Enregistrer les modifications
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<!-- Modale pour modifier les articles (quantités et prix) -->
-<div class="modal fade" id="editArticlesModal" tabindex="-1" aria-labelledby="editArticlesModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header bg-info text-white">
-                <h5 class="modal-title" id="editArticlesModalLabel">
-                    <i class="fas fa-edit me-2"></i> Modifier les Articles
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div id="editArticlesContent">
-                    <!-- Contenu chargé dynamiquement -->
-                </div>
+                    
+                    <div class="mb-3">
+                        <label for="editNotes" class="form-label fw-semibold">Notes de modification</label>
+                        <textarea class="form-control" id="editNotes" name="notes" rows="3" 
+                                  placeholder="Explication des modifications apportées..."></textarea>
+                    </div>
+                </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i> Annuler
                 </button>
-                <button type="button" class="btn btn-primary" onclick="saveEditedArticles()">
-                    <i class="fas fa-save me-1"></i> Sauvegarder les modifications
+                <button type="button" class="btn btn-warning" id="saveEditFactureBtn">
+                    <i class="fas fa-save me-1"></i> Enregistrer les modifications
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modale pour l'impression de la facture -->
+<div class="modal fade" id="printFactureModal" tabindex="-1" aria-labelledby="printFactureModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-gradient-primary text-white">
+                <h5 class="modal-title" id="printFactureModalLabel">
+                    <i class="fas fa-receipt me-2"></i> Facture
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="printFactureContent">
+                    <!-- La facture sera chargée ici -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" onclick="imprimerFacture()">
+                    <i class="fas fa-print me-2"></i> Imprimer
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i> Fermer
                 </button>
             </div>
         </div>
@@ -483,9 +491,16 @@
         const resetFiltersBtn = document.getElementById('resetFilters');
         const startDateInput = document.getElementById('start_date');
         const endDateInput = document.getElementById('end_date');
-        const viewDetailsButtons = document.querySelectorAll('.view-details');
-        const imprimerFactureButtons = document.querySelectorAll('.imprimer-facture-btn');
+        const viewDetailsButtons = document.querySelectorAll('.view-details-btn');
         const editFactureButtons = document.querySelectorAll('.edit-facture-btn');
+        const printFactureButtons = document.querySelectorAll('.print-facture-btn');
+        const printFromDetailsBtn = document.getElementById('printFromDetailsBtn');
+        const saveEditFactureBtn = document.getElementById('saveEditFactureBtn');
+        const addArticleBtn = document.getElementById('addArticleBtn');
+        const articlesBody = document.getElementById('articlesBody');
+        const articleTemplate = document.getElementById('articleTemplate');
+        let currentFactureData = null;
+        let articleCounter = 0;
 
         // Fonction de filtrage côté client
         function filterFactures() {
@@ -545,46 +560,288 @@
             });
         });
 
-        // Gestion du bouton d'impression direct
-        imprimerFactureButtons.forEach(button => {
-            button.addEventListener('click', function() {
-                const factureId = this.getAttribute('data-facture-id');
-                imprimerFacture(factureId);
-            });
-        });
-
-        // Gestion du bouton d'édition
+        // Gestion du bouton de modification
         editFactureButtons.forEach(button => {
             button.addEventListener('click', function() {
                 const factureId = this.getAttribute('data-facture-id');
-                chargerFacturePourEdition(factureId);
+                chargerDetailsPourModification(factureId);
             });
         });
 
-        // Gestion du changement de mode de paiement
-        document.querySelectorAll('input[name="paiement_type"]').forEach(radio => {
-            radio.addEventListener('change', function() {
-                updatePaiementFields();
-                calculateBalance();
+        // Gestion du bouton d'impression direct
+        printFactureButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                chargerFacturePourImpression(factureId);
             });
         });
 
-        // Gestion des changements de montants
-        const editMontantCash = document.getElementById('edit_montant_cash');
-        const editMontantCredit = document.getElementById('edit_montant_credit');
-        if (editMontantCash) {
-            editMontantCash.addEventListener('input', calculateBalance);
-        }
-        if (editMontantCredit) {
-            editMontantCredit.addEventListener('input', calculateBalance);
+        // Gestion du bouton d'impression depuis la modale des détails
+        if (printFromDetailsBtn) {
+            printFromDetailsBtn.addEventListener('click', function() {
+                const factureId = document.getElementById('detailsFactureModal').getAttribute('data-current-facture-id');
+                if (factureId) {
+                    chargerFacturePourImpression(factureId);
+                }
+            });
         }
 
-        // Soumission du formulaire d'édition
-        const editFactureForm = document.getElementById('editFactureForm');
-        if (editFactureForm) {
-            editFactureForm.addEventListener('submit', function(e) {
-                e.preventDefault();
-                soumettreEditionFacture();
+        // Ajouter un nouvel article
+        if (addArticleBtn) {
+            addArticleBtn.addEventListener('click', function() {
+                ajouterNouvelArticle();
+            });
+        }
+
+        // Fonction pour ajouter un nouvel article
+        function ajouterNouvelArticle(produitData = null) {
+            const template = articleTemplate.content.cloneNode(true);
+            const newRow = template.querySelector('.article-row');
+            const index = articleCounter++;
+            
+            newRow.setAttribute('data-index', index);
+            newRow.querySelector('.article-index').textContent = index + 1;
+            
+            // Si des données de produit sont fournies (pour modification)
+            if (produitData) {
+                const select = newRow.querySelector('.produit-select');
+                select.value = produitData.produit_id || '';
+                
+                if (select.value) {
+                    const selectedOption = select.options[select.selectedIndex];
+                    updateStockInfo(newRow, selectedOption);
+                    
+                    // Remplir les autres champs
+                    newRow.querySelector('.quantite-input').value = produitData.quantite || 1;
+                    newRow.querySelector('.prix-input').value = produitData.prix_unitaire || 0;
+                    
+                    // Calculer le total
+                    updateArticleTotal(newRow);
+                }
+            }
+            
+            // Événements pour l'article
+            const select = newRow.querySelector('.produit-select');
+            const quantiteInput = newRow.querySelector('.quantite-input');
+            const prixInput = newRow.querySelector('.prix-input');
+            const removeBtn = newRow.querySelector('.remove-article-btn');
+            
+            select.addEventListener('change', function() {
+                updateStockInfo(newRow, this.options[this.selectedIndex]);
+                if (this.value) {
+                    const prix = parseFloat(this.options[this.selectedIndex].getAttribute('data-prix')) || 0;
+                    prixInput.value = prix.toFixed(2);
+                    updateArticleTotal(newRow);
+                }
+                updateMontantTotal();
+            });
+            
+            quantiteInput.addEventListener('input', function() {
+                updateArticleTotal(newRow);
+                updateMontantTotal();
+            });
+            
+            prixInput.addEventListener('input', function() {
+                updateArticleTotal(newRow);
+                updateMontantTotal();
+            });
+            
+            removeBtn.addEventListener('click', function() {
+                newRow.remove();
+                renumberArticles();
+                updateMontantTotal();
+            });
+            
+            articlesBody.appendChild(newRow);
+            
+            // Si c'est un nouvel article vide, sélectionner automatiquement le premier produit
+            if (!produitData && select.options.length > 1) {
+                select.selectedIndex = 1;
+                select.dispatchEvent(new Event('change'));
+            }
+            
+            updateMontantTotal();
+            return newRow;
+        }
+        
+        // Mettre à jour les informations de stock
+        function updateStockInfo(row, option) {
+            const stockInfo = row.querySelector('.stock-info');
+            if (option && option.value) {
+                const stockMagasin = option.getAttribute('data-quantite-magasin') || 0;
+                const stockDepot = option.getAttribute('data-quantite-depot') || 0;
+                stockInfo.innerHTML = `
+                    <span class="text-primary">Magasin: ${stockMagasin}</span> | 
+                    <span class="text-success">Dépôt: ${stockDepot}</span>
+                `;
+            } else {
+                stockInfo.innerHTML = '';
+            }
+        }
+        
+        // Mettre à jour le total d'un article
+        function updateArticleTotal(row) {
+            const quantite = parseFloat(row.querySelector('.quantite-input').value) || 0;
+            const prix = parseFloat(row.querySelector('.prix-input').value) || 0;
+            const total = quantite * prix;
+            row.querySelector('.article-total').textContent = total.toFixed(2) + ' $';
+            return total;
+        }
+        
+        // Renuméroter les articles
+        function renumberArticles() {
+            const rows = articlesBody.querySelectorAll('.article-row');
+            rows.forEach((row, index) => {
+                row.setAttribute('data-index', index);
+                row.querySelector('.article-index').textContent = index + 1;
+            });
+            articleCounter = rows.length;
+        }
+        
+        // Mettre à jour le montant total de la facture
+        function updateMontantTotal() {
+            const rows = articlesBody.querySelectorAll('.article-row');
+            let total = 0;
+            
+            rows.forEach(row => {
+                total += updateArticleTotal(row);
+            });
+            
+            document.getElementById('editMontantTotal').value = total.toFixed(2);
+            document.getElementById('editTotalGeneral').textContent = total.toFixed(2) + ' $';
+            
+            // Mettre à jour les champs de paiement
+            updatePaiementFields();
+            
+            return total;
+        }
+        
+        // Mettre à jour les champs de paiement selon le mode
+        function updatePaiementFields() {
+            const modePaiement = document.getElementById('editModePaiement').value;
+            const montantTotal = parseFloat(document.getElementById('editMontantTotal').value) || 0;
+            const montantCash = parseFloat(document.getElementById('editMontantCash').value) || 0;
+            
+            if (modePaiement === 'credit') {
+                const montantCredit = Math.max(0, montantTotal - montantCash);
+                document.getElementById('editMontantCredit').value = montantCredit.toFixed(2);
+                document.getElementById('editMontantCash').max = montantTotal;
+            } else {
+                document.getElementById('editMontantCash').value = montantTotal;
+                document.getElementById('editMontantCredit').value = 0;
+            }
+        }
+        
+        // Écouter les changements de mode de paiement et montant cash
+        document.getElementById('editModePaiement')?.addEventListener('change', updatePaiementFields);
+        document.getElementById('editMontantCash')?.addEventListener('input', updatePaiementFields);
+
+        // Sauvegarder les modifications de la facture
+        if (saveEditFactureBtn) {
+            saveEditFactureBtn.addEventListener('click', function() {
+                sauvegarderModificationFacture();
+            });
+        }
+        
+        // Fonction pour sauvegarder les modifications
+        function sauvegarderModificationFacture() {
+            const factureId = document.getElementById('editFactureId').value;
+            const nomClient = document.getElementById('editNomClient').value.trim();
+            const modePaiement = document.getElementById('editModePaiement').value;
+            const montantCash = parseFloat(document.getElementById('editMontantCash').value) || 0;
+            const montantTotal = parseFloat(document.getElementById('editMontantTotal').value) || 0;
+            const typeLivraison = document.getElementById('editTypeLivraison').value;
+            const lieuRetrait = document.getElementById('editLieuRetrait').value;
+            const notes = document.getElementById('editNotes').value;
+            
+            // Validation
+            if (!nomClient) {
+                alert('Le nom du client est requis');
+                return;
+            }
+            
+            if (modePaiement === 'credit' && montantCash > montantTotal) {
+                alert('Le montant cash ne peut pas dépasser le montant total');
+                return;
+            }
+            
+            // Récupérer les articles
+            const articles = [];
+            const rows = articlesBody.querySelectorAll('.article-row');
+            let hasErrors = false;
+            
+            rows.forEach(row => {
+                const produitSelect = row.querySelector('.produit-select');
+                const produitId = produitSelect.value;
+                const produitNom = produitSelect.options[produitSelect.selectedIndex].text.split(' (')[0];
+                const quantite = parseInt(row.querySelector('.quantite-input').value) || 0;
+                const prix = parseFloat(row.querySelector('.prix-input').value) || 0;
+                
+                if (!produitId || quantite <= 0 || prix <= 0) {
+                    hasErrors = true;
+                    return;
+                }
+                
+                articles.push({
+                    produit_id: parseInt(produitId),
+                    produit_nom: produitNom,
+                    quantite: quantite,
+                    prix_unitaire: prix,
+                    montant_total: quantite * prix
+                });
+            });
+            
+            if (articles.length === 0) {
+                alert('La facture doit contenir au moins un article');
+                return;
+            }
+            
+            if (hasErrors) {
+                alert('Veuillez vérifier tous les articles (produit, quantité et prix requis)');
+                return;
+            }
+            
+            // Préparer les données
+            const data = {
+                facture_id: parseInt(factureId),
+                nom_client: nomClient,
+                mode_paiement: modePaiement,
+                montant_cash: montantCash,
+                type_livraison: typeLivraison,
+                lieu_retrait: lieuRetrait,
+                notes: notes,
+                articles: articles
+            };
+            
+            // Afficher un indicateur de chargement
+            const originalText = saveEditFactureBtn.innerHTML;
+            saveEditFactureBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Enregistrement...';
+            saveEditFactureBtn.disabled = true;
+            
+            // Envoyer les données au serveur
+            fetch('/factures/modifier', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Recharger la page pour voir les modifications
+                    location.reload();
+                } else {
+                    alert('Erreur: ' + data.message);
+                    saveEditFactureBtn.innerHTML = originalText;
+                    saveEditFactureBtn.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error('Erreur:', error);
+                alert('Erreur lors de la modification');
+                saveEditFactureBtn.innerHTML = originalText;
+                saveEditFactureBtn.disabled = false;
             });
         }
 
@@ -598,6 +855,10 @@
             .then(response => response.json())
             .then(data => {
                 afficherDetailsFacture(data);
+                
+                // Afficher la modale
+                const detailsModal = new bootstrap.Modal(document.getElementById('detailsFactureModal'));
+                detailsModal.show();
             })
             .catch(error => {
                 console.error('Erreur:', error);
@@ -722,425 +983,544 @@
         document.getElementById('detailsFactureModal').setAttribute('data-current-facture-id', facture.id);
     }
 
-    // Fonction pour imprimer depuis la modale
-    function imprimerFactureFromModal() {
-        const factureId = document.getElementById('detailsFactureModal').getAttribute('data-current-facture-id');
-        if (factureId) {
-            imprimerFacture(factureId);
-        }
-    }
-
-    // Fonction pour charger les données d'une facture pour l'édition
-    function chargerFacturePourEdition(factureId) {
-        fetch(`/factures/${factureId}/edit`)
+    // Fonction pour charger les détails pour modification
+    function chargerDetailsPourModification(factureId) {
+        fetch(`/factures/${factureId}/details.json`)
             .then(response => response.json())
             .then(data => {
-                afficherFormulaireEdition(data);
+                afficherFormModification(data);
+                const editModal = new bootstrap.Modal(document.getElementById('editFactureModal'));
+                editModal.show();
             })
             .catch(error => {
                 console.error('Erreur:', error);
-                alert('Erreur lors du chargement des données de la facture');
+                alert('Erreur lors du chargement des détails de la facture');
             });
     }
 
-    // Fonction pour afficher le formulaire d'édition
-    function afficherFormulaireEdition(data) {
+    // Fonction pour afficher le formulaire de modification
+    function afficherFormModification(data) {
         const { facture, ventes } = data;
         
-        // Remplir les champs du formulaire
-        document.getElementById('edit_facture_id').value = facture.id;
-        document.getElementById('edit_nom_client').value = facture.nom_client;
-        document.getElementById('edit_montant_total').value = facture.montant_total.toFixed(2);
+        // Remplir les informations de base
+        document.getElementById('editFactureId').value = facture.id;
+        document.getElementById('editFactureNumber').textContent = facture.id;
+        document.getElementById('editNomClient').value = facture.nom_client;
+        document.getElementById('editModePaiement').value = facture.paiement_credit ? 'credit' : 'comptant';
+        document.getElementById('editMontantCash').value = facture.montant_cash;
+        document.getElementById('editTypeLivraison').value = facture.type_livraison || 'sur_place';
+        document.getElementById('editLieuRetrait').value = facture.lieu_retrait || '';
         
-        // Définir le mode de paiement
-        if (facture.paiement_credit) {
-            document.getElementById('edit_paiement_credit').checked = true;
-            document.getElementById('edit_montant_credit').value = facture.montant_credit.toFixed(2);
-            document.getElementById('edit_credit_section').style.display = 'block';
-        } else {
-            document.getElementById('edit_paiement_comptant').checked = true;
-            document.getElementById('edit_montant_credit').value = '0.00';
-            document.getElementById('edit_credit_section').style.display = 'none';
-        }
+        // Vider la table des articles
+        const articlesBody = document.getElementById('articlesBody');
+        articlesBody.innerHTML = '';
         
-        document.getElementById('edit_montant_cash').value = facture.montant_cash.toFixed(2);
-        
-        // Mettre à jour le formulaire d'action
-        document.getElementById('editFactureForm').action = `/factures/${facture.id}/modifier`;
-        
-        // Afficher les articles
-        afficherArticlesEdition(ventes);
-        
-        // Mettre à jour les champs de paiement et calculer le solde
-        updatePaiementFields();
-        calculateBalance();
-    }
-
-    // Fonction pour afficher les articles dans le formulaire d'édition
-    function afficherArticlesEdition(ventes) {
-        const tbody = document.getElementById('edit_articles_body');
-        let html = '';
-        let total = 0;
-        
-        ventes.forEach(vente => {
-            total += vente.montant_total;
-            html += `
-                <tr>
-                    <td>${vente.produit_nom}</td>
-                    <td class="text-center">${vente.quantite}</td>
-                    <td class="text-end">${vente.prix_unitaire.toFixed(2)} $</td>
-                    <td class="text-end fw-bold">${vente.montant_total.toFixed(2)} $</td>
-                </tr>
-            `;
+        // Ajouter les articles existants
+        ventes.forEach((vente, index) => {
+            ajouterNouvelArticle({
+                produit_id: vente.produit_id || 0,
+                produit_nom: vente.produit_nom,
+                quantite: vente.quantite,
+                prix_unitaire: vente.prix_unitaire,
+                montant_total: vente.montant_total
+            });
         });
         
-        tbody.innerHTML = html;
-        document.getElementById('edit_articles_total').textContent = total.toFixed(2) + ' $';
+        // Mettre à jour le total
+        updateMontantTotal();
+    }
+
+    // Fonction pour mettre à jour le montant total
+    function updateMontantTotal() {
+        const rows = document.querySelectorAll('#articlesBody .article-row');
+        let total = 0;
+        
+        rows.forEach(row => {
+            const quantite = parseFloat(row.querySelector('.quantite-input').value) || 0;
+            const prix = parseFloat(row.querySelector('.prix-input').value) || 0;
+            const articleTotal = quantite * prix;
+            row.querySelector('.article-total').textContent = articleTotal.toFixed(2) + ' $';
+            total += articleTotal;
+        });
+        
+        document.getElementById('editMontantTotal').value = total.toFixed(2);
+        document.getElementById('editTotalGeneral').textContent = total.toFixed(2) + ' $';
+        updatePaiementFields();
+        
+        return total;
     }
 
     // Fonction pour mettre à jour les champs de paiement
     function updatePaiementFields() {
-        const paiementComptant = document.getElementById('edit_paiement_comptant').checked;
-        const montantTotal = parseFloat(document.getElementById('edit_montant_total').value);
+        const modePaiement = document.getElementById('editModePaiement').value;
+        const montantTotal = parseFloat(document.getElementById('editMontantTotal').value) || 0;
+        const montantCash = parseFloat(document.getElementById('editMontantCash').value) || 0;
         
-        if (paiementComptant) {
-            // En comptant, tout est payé cash
-            document.getElementById('edit_credit_section').style.display = 'none';
-            document.getElementById('edit_montant_cash').value = montantTotal.toFixed(2);
-            document.getElementById('edit_montant_cash').readOnly = true;
-            document.getElementById('edit_montant_credit').value = '0.00';
+        if (modePaiement === 'credit') {
+            const montantCredit = Math.max(0, montantTotal - montantCash);
+            document.getElementById('editMontantCredit').value = montantCredit.toFixed(2);
+            document.getElementById('editMontantCash').max = montantTotal;
         } else {
-            // En crédit, on peut modifier les deux
-            document.getElementById('edit_credit_section').style.display = 'block';
-            document.getElementById('edit_montant_cash').readOnly = false;
+            document.getElementById('editMontantCash').value = montantTotal;
+            document.getElementById('editMontantCredit').value = 0;
+        }
+    }
+
+    // Fonction pour ajouter un nouvel article (définie globalement)
+    function ajouterNouvelArticle(produitData = null) {
+        const articleTemplate = document.getElementById('articleTemplate');
+        const articlesBody = document.getElementById('articlesBody');
+        
+        const template = articleTemplate.content.cloneNode(true);
+        const newRow = template.querySelector('.article-row');
+        const index = document.querySelectorAll('#articlesBody .article-row').length;
+        
+        newRow.setAttribute('data-index', index);
+        newRow.querySelector('.article-index').textContent = index + 1;
+        
+        // Si des données de produit sont fournies
+        if (produitData && produitData.produit_id) {
+            const select = newRow.querySelector('.produit-select');
+            // Chercher l'option correspondant au produit_id
+            for (let option of select.options) {
+                if (parseInt(option.value) === produitData.produit_id) {
+                    select.value = option.value;
+                    break;
+                }
+            }
             
-            // Calculer automatiquement le crédit si le cash est inférieur au total
-            const cash = parseFloat(document.getElementById('edit_montant_cash').value) || 0;
-            if (cash < montantTotal) {
-                document.getElementById('edit_montant_credit').value = (montantTotal - cash).toFixed(2);
-            }
-        }
-    }
-
-    // Fonction pour calculer et afficher le solde
-    function calculateBalance() {
-        const montantTotal = parseFloat(document.getElementById('edit_montant_total').value) || 0;
-        const cash = parseFloat(document.getElementById('edit_montant_cash').value) || 0;
-        const credit = parseFloat(document.getElementById('edit_montant_credit').value) || 0;
-        const paiementComptant = document.getElementById('edit_paiement_comptant').checked;
-        
-        // Mettre à jour l'affichage des montants
-        document.getElementById('edit_total_amount').textContent = montantTotal.toFixed(2) + ' $';
-        document.getElementById('edit_cash_amount').textContent = cash.toFixed(2) + ' $';
-        document.getElementById('edit_credit_amount').textContent = credit.toFixed(2) + ' $';
-        
-        // Calculer le solde
-        const balance = montantTotal - (cash + credit);
-        const balanceElement = document.getElementById('edit_balance');
-        
-        if (balance === 0) {
-            balanceElement.textContent = '0.00 $';
-            balanceElement.className = 'text-success';
-        } else if (balance > 0) {
-            balanceElement.textContent = '+' + balance.toFixed(2) + ' $';
-            balanceElement.className = 'text-warning';
-        } else {
-            balanceElement.textContent = balance.toFixed(2) + ' $';
-            balanceElement.className = 'text-danger';
-        }
-        
-        // Afficher l'alerte de solde
-        document.getElementById('edit_balance_alert').style.display = 'block';
-        
-        // Si en comptant, forcer le solde à 0
-        if (paiementComptant) {
-            document.getElementById('edit_balance').textContent = '0.00 $';
-            document.getElementById('edit_balance').className = 'text-success';
-        }
-    }
-
-    // Fonction pour soumettre le formulaire d'édition
-    function soumettreEditionFacture() {
-        const form = document.getElementById('editFactureForm');
-        const formData = new FormData(form);
-        
-        // Validation supplémentaire
-        const montantTotal = parseFloat(document.getElementById('edit_montant_total').value);
-        const cash = parseFloat(document.getElementById('edit_montant_cash').value);
-        const credit = parseFloat(document.getElementById('edit_montant_credit').value);
-        
-        if (document.getElementById('edit_paiement_credit').checked) {
-            // Pour le crédit, vérifier que cash + credit = total
-            if (Math.abs((cash + credit) - montantTotal) > 0.01) {
-                alert('Pour un paiement en crédit, la somme du cash et du crédit doit être égale au montant total.');
-                return false;
+            // Si on a trouvé le produit
+            if (select.value) {
+                const selectedOption = select.options[select.selectedIndex];
+                // Mettre à jour les infos stock
+                const stockInfo = newRow.querySelector('.stock-info');
+                const stockMagasin = selectedOption.getAttribute('data-quantite-magasin') || 0;
+                const stockDepot = selectedOption.getAttribute('data-quantite-depot') || 0;
+                stockInfo.innerHTML = `
+                    <span class="text-primary">Magasin: ${stockMagasin}</span> | 
+                    <span class="text-success">Dépôt: ${stockDepot}</span>
+                `;
+                
+                // Remplir les autres champs
+                newRow.querySelector('.quantite-input').value = produitData.quantite || 1;
+                newRow.querySelector('.prix-input').value = produitData.prix_unitaire || 0;
             }
         }
         
-        // Soumettre le formulaire
-        fetch(form.action, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (response.redirected) {
-                window.location.href = response.url;
+        // Événements pour l'article
+        const select = newRow.querySelector('.produit-select');
+        const quantiteInput = newRow.querySelector('.quantite-input');
+        const prixInput = newRow.querySelector('.prix-input');
+        const removeBtn = newRow.querySelector('.remove-article-btn');
+        
+        select.addEventListener('change', function() {
+            if (this.value) {
+                const selectedOption = this.options[this.selectedIndex];
+                const stockInfo = newRow.querySelector('.stock-info');
+                const stockMagasin = selectedOption.getAttribute('data-quantite-magasin') || 0;
+                const stockDepot = selectedOption.getAttribute('data-quantite-depot') || 0;
+                stockInfo.innerHTML = `
+                    <span class="text-primary">Magasin: ${stockMagasin}</span> | 
+                    <span class="text-success">Dépôt: ${stockDepot}</span>
+                `;
+                
+                const prix = parseFloat(selectedOption.getAttribute('data-prix')) || 0;
+                prixInput.value = prix.toFixed(2);
+                updateArticleTotal(newRow);
+                updateMontantTotal();
             }
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la modification de la facture');
         });
+        
+        quantiteInput.addEventListener('input', function() {
+            updateArticleTotal(newRow);
+            updateMontantTotal();
+        });
+        
+        prixInput.addEventListener('input', function() {
+            updateArticleTotal(newRow);
+            updateMontantTotal();
+        });
+        
+        removeBtn.addEventListener('click', function() {
+            newRow.remove();
+            // Renuméroter les articles
+            const rows = document.querySelectorAll('#articlesBody .article-row');
+            rows.forEach((row, idx) => {
+                row.setAttribute('data-index', idx);
+                row.querySelector('.article-index').textContent = idx + 1;
+            });
+            updateMontantTotal();
+        });
+        
+        articlesBody.appendChild(newRow);
+        
+        // Si c'est un nouvel article vide, déclencher le changement
+        if (!produitData && select.value) {
+            select.dispatchEvent(new Event('change'));
+        }
+        
+        // Mettre à jour le total
+        updateArticleTotal(newRow);
+        updateMontantTotal();
+        
+        return newRow;
     }
 
-    // Fonction pour ouvrir le modal de modification des articles
-    function openEditArticlesModal() {
-        const factureId = document.getElementById('edit_facture_id').value;
-        
-        fetch(`/factures/${factureId}/edit`)
+    // Mettre à jour le total d'un article
+    function updateArticleTotal(row) {
+        const quantite = parseFloat(row.querySelector('.quantite-input').value) || 0;
+        const prix = parseFloat(row.querySelector('.prix-input').value) || 0;
+        const total = quantite * prix;
+        row.querySelector('.article-total').textContent = total.toFixed(2) + ' $';
+        return total;
+    }
+
+    // Fonction pour charger une facture pour impression
+    function chargerFacturePourImpression(factureId) {
+        fetch(`/factures/${factureId}/details.json`)
             .then(response => response.json())
             .then(data => {
-                afficherFormulaireArticles(data.ventes);
+                afficherFacturePourImpression(data);
             })
             .catch(error => {
                 console.error('Erreur:', error);
-                alert('Erreur lors du chargement des articles');
+                alert('Erreur lors du chargement de la facture pour impression');
             });
     }
 
-    // Fonction pour afficher le formulaire de modification des articles
-    function afficherFormulaireArticles(ventes) {
+    // Fonction pour afficher la facture dans la modale d'impression
+    function afficherFacturePourImpression(data) {
+        const facture = data.facture;
+        const ventes = data.ventes || [];
+        
         let html = `
-            <div class="table-responsive">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Produit</th>
-                            <th class="text-center">Stock</th>
-                            <th class="text-center">Quantité actuelle</th>
-                            <th class="text-center">Nouvelle quantité</th>
-                            <th class="text-end">Prix actuel</th>
-                            <th class="text-end">Nouveau prix</th>
-                            <th class="text-end">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+            <div class="thermal-receipt mx-auto" id="facture-print" style="text-align: center;">
+                <!-- En-tête centré -->
+                <div class="receipt-header" style="margin-bottom: 10px;">
+                    <h2 style="font-size: 16px; margin: 0; line-height: 1.2; font-weight: 900; font-family: 'Arial Black', 'Arial Bold', Gadget, sans-serif; text-align: center;">PETIT KIOSQUE M.T.G</h2>
+                    <p style="font-size: 11px; margin: 3px 0; font-weight: bold; font-family: Arial, sans-serif; text-align: center;">Galerie G.T.B Numero 48</p>
+                    <p style="font-size: 11px; margin: 3px 0; font-weight: bold; font-family: Arial, sans-serif; text-align: center;">Numéro Impôt: A1719046X</p>
+                    <p style="font-size: 11px; margin: 3px 0; font-weight: bold; font-family: Arial, sans-serif; text-align: center;">Tel: +243 976 515 383 / +243 844 076 837</p>
+                </div>
+                
+                <div style="font-size: 10px; margin: 8px 0; font-weight: bold; text-align: center;">================================</div>
+                
+                <!-- Informations de la facture centrées -->
+                <div style="font-size: 11px; margin-bottom: 10px; font-family: Arial, sans-serif; text-align: center;">
+                    <div style="margin: 5px 0;">
+                        <strong>FACTURE N°: ${facture.id}</strong>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>DATE: ${facture.date_facture.split(' ')[0]}</strong>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>HEURE: ${facture.date_facture.split(' ')[1]}</strong>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>CLIENT: ${facture.nom_client || ''}</strong>
+                    </div>
+                </div>
+                
+                <div style="font-size: 10px; margin: 8px 0; font-weight: bold; text-align: center;">--------------------------------</div>
+                
+                <!-- Tableau des produits SEULEMENT -->
+                <div style="font-family: Arial, sans-serif;">
+                    <table style="width: 100%; border-collapse: collapse; margin: 0 auto 10px;">
+                        <thead>
+                            <tr>
+                                <th style="border: 1px solid #000; padding: 6px; font-size: 11px; font-weight: 900; text-align: center; background-color: #f8f9fa;">DESCRIPTION</th>
+                                <th style="border: 1px solid #000; padding: 6px; font-size: 11px; font-weight: 900; text-align: center; background-color: #f8f9fa;">QTE</th>
+                                <th style="border: 1px solid #000; padding: 6px; font-size: 11px; font-weight: 900; text-align: center; background-color: #f8f9fa;">PRIX</th>
+                                <th style="border: 1px solid #000; padding: 6px; font-size: 11px; font-weight: 900; text-align: center; background-color: #f8f9fa;">TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
         `;
         
         ventes.forEach(vente => {
+            const nomProduit = vente.produit_nom || '';
             html += `
-                <tr>
-                    <td class="fw-semibold">${vente.produit_nom}</td>
-                    <td class="text-center">
-                        <span class="badge bg-info">${vente.stock_actuel || 'N/A'}</span>
-                    </td>
-                    <td class="text-center">
-                        <span class="badge bg-secondary">${vente.quantite}</span>
-                    </td>
-                    <td class="text-center">
-                        <input type="number" 
-                               class="form-control form-control-sm" 
-                               min="1" 
-                               value="${vente.quantite}" 
-                               data-vente-id="${vente.id}"
-                               onchange="calculateArticleTotal(this)"
-                               style="width: 80px;">
-                    </td>
-                    <td class="text-end">
-                        <span class="text-muted">${vente.prix_unitaire.toFixed(2)} $</span>
-                    </td>
-                    <td class="text-end">
-                        <div class="d-flex flex-column align-items-end">
-                            <input type="number" 
-                                   class="form-control form-control-sm mb-1" 
-                                   min="${vente.prix_achat}" 
-                                   step="0.01"
-                                   value="${vente.prix_unitaire.toFixed(2)}" 
-                                   data-vente-id="${vente.id}"
-                                   data-prix-achat="${vente.prix_achat}"
-                                   onchange="calculateArticleTotal(this)"
-                                   style="width: 100px; text-align: right;">
-                            <small class="text-muted d-block prix-achat-info">Prix d'achat: ${vente.prix_achat.toFixed(2)} $</small>
-                        </div>
-                    </td>
-                    <td class="text-end fw-bold article-total" 
-                        data-quantite="${vente.quantite}"
-                        data-prix="${vente.prix_unitaire}">
-                        ${vente.montant_total.toFixed(2)} $
-                    </td>
-                </tr>
+                            <tr>
+                                <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
+                                    <strong>${nomProduit}</strong>
+                                </td>
+                                <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
+                                    <strong>${vente.quantite || 0}</strong>
+                                </td>
+                                <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
+                                    <strong>${parseFloat(vente.prix_unitaire || 0).toFixed(2)}$</strong>
+                                </td>
+                                <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
+                                    <strong>${parseFloat(vente.montant_total || 0).toFixed(2)}$</strong>
+                                </td>
+                            </tr>
             `;
         });
         
         html += `
-                    </tbody>
-                    <tfoot>
-                        <tr class="table-light">
-                            <td colspan="6" class="text-end fw-bold">Nouveau total:</td>
-                            <td class="text-end fw-bold" id="new_total_amount">${ventes.reduce((sum, v) => sum + v.montant_total, 0).toFixed(2)} $</td>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-            <div class="alert alert-info">
-                <i class="fas fa-info-circle me-2"></i>
-                <strong>Instructions:</strong>
-                <ul class="mb-0 mt-2">
-                    <li>Vous pouvez modifier la quantité et/ou le prix unitaire</li>
-                    <li>Le prix ne peut pas être inférieur au prix d'achat (${ventes[0]?.prix_achat ? ventes[0].prix_achat.toFixed(2) + ' $' : 'indisponible'})</li>
-                    <li>Le total sera recalculé automatiquement</li>
-                </ul>
-            </div>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="font-size: 10px; margin: 8px 0; font-weight: bold; text-align: center;">--------------------------------</div>
+                
+                <!-- Total général centré -->
+                <div style="font-size: 12px; margin: 10px 0; font-family: Arial, sans-serif; text-align: center;">
+                    <div style="display: inline-block; background-color: #e9ecef; padding: 8px 15px; border: 1px solid #000; border-radius: 4px;">
+                        <strong>TOTAL GÉNÉRAL: ${parseFloat(facture.montant_total || 0).toFixed(2)}$</strong>
+                    </div>
+                </div>
         `;
         
-        document.getElementById('editArticlesContent').innerHTML = html;
-        
-        // Afficher le modal
-        const modal = new bootstrap.Modal(document.getElementById('editArticlesModal'));
-        modal.show();
-    }
-
-    // Fonction pour calculer le total d'un article
-    function calculateArticleTotal(input) {
-        const row = input.closest('tr');
-        const quantiteInput = row.querySelector('input[type="number"][min="1"]');
-        const prixInput = row.querySelector('input[type="number"][min]');
-        
-        const quantite = parseInt(quantiteInput.value) || 0;
-        const prix = parseFloat(prixInput.value) || 0;
-        const prixAchat = parseFloat(prixInput.getAttribute('data-prix-achat')) || 0;
-        
-        // Validation du prix
-        if (prix < prixAchat) {
-            alert(`Le prix (${prix.toFixed(2)} $) ne peut pas être inférieur au prix d'achat (${prixAchat.toFixed(2)} $)`);
-            prixInput.value = prixAchat.toFixed(2);
-            return;
+        if (facture.paiement_credit) {
+            html += `
+                <div style="font-size: 10px; margin: 8px 0; font-weight: bold; text-align: center;">--------------------------------</div>
+                
+                <!-- Paiement crédit centré -->
+                <div style="font-size: 11px; margin: 10px 0; font-family: Arial, sans-serif; text-align: center;">
+                    <div style="margin: 5px 0;">
+                        <strong>MODE DE PAIEMENT: <span style="color: #dc3545;">CRÉDIT</span></strong>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>MONTANT PAYÉ: ${parseFloat(facture.montant_cash || 0).toFixed(2)}$</strong>
+                    </div>
+                    <div style="margin: 5px 0;">
+                        <strong>RESTE À PAYER: <span style="color: #dc3545;">${parseFloat(facture.montant_credit || 0).toFixed(2)}$</span></strong>
+                    </div>
+                </div>
+            `;
+        } else {
+            html += `
+                <!-- Paiement comptant centré -->
+                <div style="font-size: 11px; margin: 10px 0; font-family: Arial, sans-serif; text-align: center;">
+                    <div style="margin: 5px 0;">
+                        <strong>MODE DE PAIEMENT: <span style="color: #28a745;">COMPTANT</span></strong>
+                    </div>
+                </div>
+            `;
         }
         
-        // Validation de la quantité
-        if (quantite <= 0) {
-            alert('La quantité doit être supérieure à 0');
-            quantiteInput.value = 1;
-            return;
-        }
-        
-        const total = prix * quantite;
-        
-        // Mettre à jour les données dans la cellule total
-        const totalCell = row.querySelector('.article-total');
-        totalCell.setAttribute('data-quantite', quantite);
-        totalCell.setAttribute('data-prix', prix);
-        totalCell.textContent = total.toFixed(2) + ' $';
-        
-        calculateNewTotal();
-    }
-
-    // Fonction pour calculer le nouveau total
-    function calculateNewTotal() {
-        let total = 0;
-        document.querySelectorAll('.article-total').forEach(cell => {
-            total += parseFloat(cell.textContent);
-        });
-        document.getElementById('new_total_amount').textContent = total.toFixed(2) + ' $';
-    }
-
-    // Fonction pour sauvegarder les articles modifiés
-    function saveEditedArticles() {
-        const factureId = document.getElementById('edit_facture_id').value;
-        const ventes = [];
-        
-        // Créer un Set pour éviter les doublons
-        const venteIds = new Set();
-        
-        // Récupérer les nouvelles quantités et prix
-        document.querySelectorAll('input[data-vente-id]').forEach(input => {
-            const venteId = parseInt(input.getAttribute('data-vente-id'));
+        html += `
+                <div style="font-size: 10px; margin: 8px 0; font-weight: bold; text-align: center;">================================</div>
+                
+                <!-- Pied de page centré -->
+                <div style="font-family: Arial, sans-serif; text-align: center;">
+                    <p style="margin: 6px 0; font-size: 11px; font-weight: bold;">Merci pour votre confiance !</p>
+                    <p style="margin: 6px 0; font-size: 10px; font-weight: bold;">Les Marchandises vendues ne sont ni remboursables ni échangables.</p>
+                    <p style="margin: 6px 0; font-size: 10px; font-weight: bold;">À bientôt chez PETIT KIOSQUE M.T.G</p>
+                    <p style="margin: 6px 0; font-size: 9px; font-weight: bold;">Imprimé le ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR', {hour: '2-digit', minute:'2-digit'})}</p>
+                </div>
+            </div>
             
-            if (!venteIds.has(venteId)) {
-                venteIds.add(venteId);
-                
-                // Trouver la ligne correspondante
-                const row = document.querySelector(`tr input[data-vente-id="${venteId}"]`).closest('tr');
-                const quantiteInput = row.querySelector('input[type="number"][min="1"]');
-                const prixInput = row.querySelector('input[type="number"][min]');
-                
-                ventes.push({
-                    id: venteId,
-                    quantite: parseInt(quantiteInput.value) || 0,
-                    prix: parseFloat(prixInput.value) || 0
-                });
-            }
-        });
-        
-        // Validation avant envoi
-        for (const vente of ventes) {
-            if (vente.quantite <= 0) {
-                alert('La quantité doit être supérieure à 0 pour tous les articles');
-                return;
-            }
-            
-            // Validation du prix par rapport au prix d'achat
-            const prixInput = document.querySelector(`input[data-vente-id="${vente.id}"][min]`);
-            const prixAchat = parseFloat(prixInput.getAttribute('data-prix-achat')) || 0;
-            
-            if (vente.prix < prixAchat) {
-                alert(`Le prix (${vente.prix.toFixed(2)} $) ne peut pas être inférieur au prix d'achat (${prixAchat.toFixed(2)} $)`);
-                return;
-            }
-        }
-        
-        // Envoyer les modifications au serveur
-        fetch(`/factures/${factureId}/modifier_articles`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ ventes: ventes })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                // Fermer le modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('editArticlesModal'));
-                modal.hide();
-                
-                // Recharger les données de la facture
-                chargerFacturePourEdition(factureId);
-                
-                // Afficher un message de succès
-                let message = 'Articles modifiés avec succès!\n';
-                if (data.modifications && data.modifications.length > 0) {
-                    message += '\nRésumé des modifications:';
-                    data.modifications.forEach(mod => {
-                        message += `\n• ${mod.produit}: ${mod.ancienne_quantite} → ${mod.nouvelle_quantite} unités`;
-                        if (mod.ancien_prix !== mod.nouveau_prix) {
-                            message += `, prix: ${mod.ancien_prix.toFixed(2)} → ${mod.nouveau_prix.toFixed(2)} $`;
-                        }
-                        message += `, total: ${mod.ancien_montant.toFixed(2)} → ${mod.nouveau_montant.toFixed(2)} $`;
-                    });
+            <style>
+                .thermal-receipt {
+                    width: 80mm;
+                    max-width: 80mm;
+                    font-family: Arial, sans-serif;
+                    padding: 5px;
                 }
-                message += `\n\nNouveau total de la facture: ${data.nouveau_total.toFixed(2)} $`;
                 
-                alert(message);
+                #facture-print * {
+                    font-weight: bold !important;
+                    text-align: center;
+                }
                 
-                // Recharger la page après un délai pour voir les changements
-                setTimeout(() => {
-                    window.location.reload();
-                }, 1500);
+                #facture-print table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    border: 1px solid #000;
+                }
                 
-            } else {
-                alert('Erreur: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('Erreur:', error);
-            alert('Erreur lors de la sauvegarde: ' + error.message);
-        });
+                #facture-print th {
+                    font-weight: 900 !important;
+                    text-transform: uppercase;
+                    background-color: #f8f9fa;
+                    text-align: center !important;
+                }
+                
+                #facture-print td {
+                    font-weight: bold !important;
+                    text-align: center !important;
+                }
+                
+                @media print {
+                    body * {
+                        visibility: hidden;
+                    }
+                    #facture-print, #facture-print * {
+                        visibility: visible;
+                        text-align: center !important;
+                    }
+                    #facture-print {
+                        position: absolute;
+                        left: 0;
+                        top: 0;
+                        width: 80mm !important;
+                        max-width: 80mm !important;
+                        font-size: 11px !important;
+                        font-weight: bold !important;
+                        font-family: Arial, sans-serif !important;
+                        text-align: center !important;
+                    }
+                    #facture-print table {
+                        width: 100% !important;
+                        border: 1px solid #000 !important;
+                    }
+                    #facture-print td, #facture-print th {
+                        font-weight: bold !important;
+                        border: 1px solid #000 !important;
+                        text-align: center !important;
+                    }
+                    #facture-print h2 {
+                        font-size: 16px !important;
+                        font-weight: 900 !important;
+                        text-align: center !important;
+                    }
+                }
+            </style>
+        `;
+        
+        document.getElementById('printFactureContent').innerHTML = html;
+        
+        // Afficher la modale d'impression
+        const printModal = new bootstrap.Modal(document.getElementById('printFactureModal'));
+        printModal.show();
     }
 
-    // Fonction pour imprimer une facture
-    function imprimerFacture(factureId) {
-        window.open(`/factures/${factureId}/imprimer`, '_blank');
+    // Fonction pour imprimer la facture
+    function imprimerFacture() {
+        const printContent = document.getElementById('facture-print');
+        if (!printContent) {
+            alert('Aucune facture à imprimer');
+            return;
+        }
+        
+        const originalContent = printContent.outerHTML;
+        
+        const printWindow = window.open('', '_blank', 'width=80mm,height=600');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Facture PETIT KIOSQUE M.T.G</title>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=80mm">
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                        font-weight: bold !important;
+                        font-family: Arial, sans-serif !important;
+                        text-align: center !important;
+                    }
+                    
+                    body {
+                        font-family: Arial, sans-serif !important;
+                        font-size: 11px !important;
+                        line-height: 1.2;
+                        width: 80mm !important;
+                        max-width: 80mm !important;
+                        margin: 0 auto !important;
+                        padding: 2mm !important;
+                        text-align: center !important;
+                    }
+                    
+                    .thermal-receipt {
+                        width: 76mm !important;
+                        max-width: 76mm !important;
+                        margin: 0 auto !important;
+                        padding: 0 !important;
+                        text-align: center !important;
+                    }
+                    
+                    .thermal-receipt * {
+                        font-weight: bold !important;
+                        text-align: center !important;
+                    }
+                    
+                    .thermal-receipt table {
+                        width: 100% !important;
+                        border-collapse: collapse;
+                        border: 1px solid #000 !important;
+                    }
+                    
+                    .thermal-receipt th {
+                        font-weight: 900 !important;
+                        text-transform: uppercase;
+                        background-color: #f8f9fa;
+                        text-align: center !important;
+                    }
+                    
+                    .thermal-receipt td {
+                        font-weight: bold !important;
+                        border: 1px solid #000 !important;
+                        text-align: center !important;
+                    }
+                    
+                    @media print {
+                        @page {
+                            size: 80mm auto;
+                            margin: 0;
+                        }
+                        
+                        body {
+                            width: 80mm !important;
+                            max-width: 80mm !important;
+                            margin: 0 !important;
+                            padding: 2mm !important;
+                            font-size: 11px !important;
+                            font-family: Arial, sans-serif !important;
+                            text-align: center !important;
+                        }
+                        
+                        .thermal-receipt {
+                            width: 76mm !important;
+                            max-width: 76mm !important;
+                            margin: 0 auto !important;
+                            text-align: center !important;
+                        }
+                        
+                        /* Forcer l'impression en bras et centré */
+                        * {
+                            font-weight: bold !important;
+                            text-align: center !important;
+                        }
+                        
+                        table {
+                            width: 100% !important;
+                            border: 1px solid #000 !important;
+                        }
+                        
+                        td, th {
+                            font-weight: bold !important;
+                            border: 1px solid #000 !important;
+                            padding: 4px !important;
+                            text-align: center !important;
+                        }
+                        
+                        h2 {
+                            font-size: 16px !important;
+                            font-weight: 900 !important;
+                            text-align: center !important;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                ${originalContent}
+            </body>
+            </html>
+        `);
+        
+        printWindow.document.close();
+        
+        printWindow.onload = function() {
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+            }, 500);
+        };
     }
 
     // Fonction pour réinitialiser la recherche
@@ -1194,55 +1574,64 @@
         max-width: 1200px;
     }
 
-    /* Styles pour la modale d'édition */
-    #edit_balance_alert {
-        font-size: 0.9rem;
+    /* Style pour la modale d'impression */
+    #printFactureModal .modal-content {
+        border-radius: 15px;
+        overflow: hidden;
     }
 
-    .article-total {
-        min-width: 100px;
+    #printFactureModal .modal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    #printFactureModal .modal-footer {
+        background-color: #f8f9fa;
+        border-top: 1px solid #dee2e6;
+    }
+
+    /* Style pour la modale de détails */
+    #detailsFactureModal .card {
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #detailsFactureModal .card-header {
+        background-color: #f8f9fa;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    #detailsFactureModal .table th {
+        background-color: #343a40;
+        color: white;
+    }
+    
+    /* Style pour la modale de modification */
+    #editFactureModal .modal-header {
+        background: linear-gradient(135deg, #ffc107 0%, #e0a800 100%);
+    }
+    
+    .edit-facture-btn {
+        color: #ffc107;
+        border-color: #ffc107;
     }
 
     .edit-facture-btn:hover {
         background-color: #ffc107;
+        color: white;
         border-color: #ffc107;
-        color: #000;
     }
-
-    /* Styles pour la modale de modification des articles */
-    #editArticlesModal .table input.form-control-sm {
-        text-align: center;
-    }
-
-    #editArticlesModal .table input.form-control-sm[type="number"][min] {
-        text-align: right;
-    }
-
-    #editArticlesModal .table td {
+    
+    /* Style pour les articles */
+    #articlesTable td {
         vertical-align: middle;
     }
-
-    #editArticlesModal .badge {
-        font-size: 0.7rem;
-        padding: 0.25em 0.4em;
+    
+    .article-row:hover {
+        background-color: rgba(255, 193, 7, 0.05);
     }
-
-    #editArticlesModal .prix-achat-info {
+    
+    .stock-info {
         font-size: 0.75rem;
-        color: #666;
-    }
-
-    #editArticlesModal .alert ul {
-        padding-left: 1.5rem;
-    }
-
-    #editArticlesModal .alert li {
-        margin-bottom: 0.25rem;
-    }
-
-    /* Style pour les prix */
-    .prix-cell {
-        min-width: 120px;
     }
 
     @media (max-width: 768px) {
@@ -1278,22 +1667,27 @@
             margin: 10px auto;
         }
         
-        #editFactureModal .modal-dialog,
-        #editArticlesModal .modal-dialog {
-            margin: 10px;
+        #printFactureModal .modal-dialog {
+            margin: 5px;
+            max-width: 95%;
         }
         
-        #editFactureModal .card,
-        #editArticlesModal .card {
-            margin-bottom: 10px;
+        #editFactureModal .modal-dialog {
+            margin: 5px;
+            max-width: 95%;
         }
         
-        #editArticlesModal .table input.form-control-sm {
-            width: 60px !important;
+        .thermal-receipt {
+            width: 95% !important;
+            max-width: 95% !important;
         }
         
-        #editArticlesModal .table input.form-control-sm[type="number"][min] {
-            width: 80px !important;
+        #facture-print table {
+            font-size: 10px !important;
+        }
+        
+        #facture-print td, #facture-print th {
+            padding: 3px !important;
         }
     }
 </style>

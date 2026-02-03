@@ -254,6 +254,52 @@
                                             </tbody>
                                         </table>
                                     </div>
+
+                                    <!-- NOUVEAU: Options de livraison -->
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Options de livraison</label>
+                                        <div class="table-responsive">
+                                            <table class="table table-bordered table-hover">
+                                                <tbody>
+                                                    <tr>
+                                                        <td class="text-center" style="width: 50%;">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="type_livraison" id="livraison_sur_place" value="sur_place" checked>
+                                                                <label class="form-check-label w-100" for="livraison_sur_place">
+                                                                    <i class="fas fa-store d-block mb-1 text-success fs-4"></i>
+                                                                    <span class="fw-semibold">Sur place</span>
+                                                                    <small class="d-block text-muted">Client emporte maintenant</small>
+                                                                </label>
+                                                            </div>
+                                                        </td>
+                                                        <td class="text-center" style="width: 50%;">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="radio" name="type_livraison" id="livraison_depot" value="depot">
+                                                                <label class="form-check-label w-100" for="livraison_depot">
+                                                                    <i class="fas fa-warehouse d-block mb-1 text-primary fs-4"></i>
+                                                                    <span class="fw-semibold">Au dépôt</span>
+                                                                    <small class="d-block text-muted">Livraison au dépôt</small>
+                                                                </label>
+                                                            </div>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+
+                                    <!-- NOUVEAU: Lieu de retrait (visible seulement pour livraison dépôt) -->
+                                    <div class="mb-3" id="lieu_retrait_group" style="display: none;">
+                                        <label class="form-label fw-semibold">Lieu de retrait au dépôt</label>
+                                        <select class="form-select" name="lieu_retrait" id="lieu_retrait">
+                                            <option value="depot_principal">Dépôt principal</option>
+                                            <option value="depot_secondaire">Dépôt secondaire</option>
+                                            <option value="entrepot">Entrepôt central</option>
+                                        </select>
+                                        <div class="form-text">
+                                            Le client retirera sa commande à cet emplacement
+                                        </div>
+                                    </div>
                                     
                                     <button type="submit" name="finaliser_vente" class="btn btn-primary w-100 mt-3 py-2 d-flex align-items-center justify-content-center">
                                         <i class="fas fa-check-circle me-2"></i> Finaliser la vente
@@ -324,6 +370,32 @@
                                 <span class="label"><strong>CLIENT:</strong></span>
                                 <span class="value"><strong>{{ facture.nom_client }}</strong></span>
                             </div>
+                            
+                            <!-- NOUVEAU: Informations de livraison -->
+                            {% if facture.type_livraison == 'depot' %}
+                            <div class="info-line">
+                                <span class="label"><strong>LIVRAISON:</strong></span>
+                                <span class="value"><strong>AU DÉPÔT</strong></span>
+                            </div>
+                            <div class="info-line">
+                                <span class="label"><strong>LIEU RETRAIT:</strong></span>
+                                <span class="value"><strong>{{ facture.lieu_retrait|upper }}</strong></span>
+                            </div>
+                            {% if livraison_info %}
+                            <div class="info-line">
+                                <span class="label"><strong>STATUT:</strong></span>
+                                <span class="value">
+                                    <strong>
+                                        {% if livraison_info.statut == 'en_attente' %}EN ATTENTE
+                                        {% elif livraison_info.statut == 'en_preparation' %}EN PRÉPARATION
+                                        {% elif livraison_info.statut == 'prete' %}PRÊTE À RETIRER
+                                        {% elif livraison_info.statut == 'livree' %}LIVRÉE
+                                        {% else %}{{ livraison_info.statut|upper }}{% endif %}
+                                    </strong>
+                                </span>
+                            </div>
+                            {% endif %}
+                            {% endif %}
                         </div>
 
                         <div class="receipt-divider">--------------------------------</div>
@@ -399,7 +471,11 @@
                         <div class="receipt-footer text-center">
                             <p class="thank-you"><strong>Merci pour votre confiance !</strong></p>
                             <p class="return-policy"><strong>Les Marchandises vendues ne sont ni remboursables ni échangables.</strong></p>
+                            {% if facture.type_livraison == 'depot' %}
+                            <p class="visit-again"><strong>Votre commande sera disponible au dépôt {{ facture.lieu_retrait }}</strong></p>
+                            {% else %}
                             <p class="visit-again"><strong>À bientôt chez PETIT KIOSQUE M.T.G</strong></p>
+                            {% endif %}
                             <p class="print-date">{{ facture.date_facture.strftime('Imprimé le %d/%m/%Y à %H:%M') }}</p>
                         </div>
                     </div>
@@ -412,6 +488,13 @@
                         <button type="button" onclick="fermerFacture()" class="btn btn-outline-secondary btn-lg">
                             <i class="fas fa-times me-2"></i> Fermer
                         </button>
+                        
+                        <!-- NOUVEAU: Bouton pour suivre la livraison -->
+                        {% if facture.type_livraison == 'depot' and livraison_info %}
+                        <a href="{{ url_for('routes.details_livraison', id=livraison_info.id) }}" class="btn btn-info btn-lg ms-2">
+                            <i class="fas fa-truck me-2"></i> Suivre la livraison
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -776,6 +859,18 @@
             <span class="text-bold">CLIENT:</span>
             <span class="text-bold">{{ facture.nom_client }}</span>
         </div>
+        
+        <!-- NOUVEAU: Informations de livraison -->
+        {% if facture.type_livraison == 'depot' %}
+        <div class="info-line">
+            <span class="text-bold">LIVRAISON:</span>
+            <span class="text-bold">AU DÉPÔT</span>
+        </div>
+        <div class="info-line">
+            <span class="text-bold">LIEU RETRAIT:</span>
+            <span class="text-bold">{{ facture.lieu_retrait|upper }}</span>
+        </div>
+        {% endif %}
     </div>
 
     <div class="receipt-divider">--------------------------------</div>
@@ -849,7 +944,11 @@
     <div class="receipt-footer">
         <div class="thank-you">Merci pour votre confiance !</div>
         <div class="return-policy text-bold"> Les Marchandises vendues ne sont ni remboursables ni échangables.</div>
+        {% if facture.type_livraison == 'depot' %}
+        <div class="return-policy text-bold">Votre commande sera disponible au dépôt {{ facture.lieu_retrait }}</div>
+        {% else %}
         <div class="return-policy text-bold">À bientôt chez PETIT KIOSQUE M.T.G</div>
+        {% endif %}
         <div class="print-date">{{ facture.date_facture.strftime('Imprimé le %d/%m/%Y à %H:%M') }}</div>
     </div>
 </body>
@@ -945,6 +1044,12 @@
         const decrementBtn = document.getElementById('decrement-qte');
         const incrementBtn = document.getElementById('increment-qte');
         const btnViderPanier = document.getElementById('btn-vider-panier');
+        
+        // NOUVEAUX ÉLÉMENTS POUR LA LIVRAISON
+        const livraisonSurPlace = document.getElementById('livraison_sur_place');
+        const livraisonDepot = document.getElementById('livraison_depot');
+        const lieuRetraitGroup = document.getElementById('lieu_retrait_group');
+        const lieuRetraitSelect = document.getElementById('lieu_retrait');
 
         // Recherche dans la modale
         searchProduitModal.addEventListener('input', function() {
@@ -1015,12 +1120,26 @@
             }
         });
 
+        // NOUVEAU: Gestion de l'affichage du lieu de retrait
+        livraisonSurPlace.addEventListener('change', function() {
+            if (this.checked) {
+                lieuRetraitGroup.style.display = 'none';
+            }
+        });
+
+        livraisonDepot.addEventListener('change', function() {
+            if (this.checked) {
+                lieuRetraitGroup.style.display = 'block';
+            }
+        });
+
         // Validation du formulaire de finalisation
         document.getElementById('finaliserForm').addEventListener('submit', function(e) {
             const paiementCreditChecked = document.getElementById('paiement_credit').checked;
             const montantCash = parseFloat(montantCashInput.value) || 0;
             const total = {{ total|tojson }};
             
+            // Validation pour le crédit
             if (paiementCreditChecked) {
                 if (montantCash < 0) {
                     alert('Le montant en cash ne peut pas être négatif');
@@ -1037,6 +1156,15 @@
                         e.preventDefault();
                         return false;
                     }
+                }
+            }
+            
+            // Validation pour la livraison au dépôt
+            const livraisonDepotChecked = document.getElementById('livraison_depot').checked;
+            if (livraisonDepotChecked) {
+                if (!confirm('La vente sera enregistrée comme "Livraison au dépôt". Le stock ne sera déduit qu\'après confirmation par le responsable du dépôt. Confirmer?')) {
+                    e.preventDefault();
+                    return false;
                 }
             }
         });
@@ -1151,4 +1279,4 @@
         }
     }
 </style>
-{% endblock %}
+{% endblock %

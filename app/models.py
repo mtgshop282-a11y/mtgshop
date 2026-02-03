@@ -4,7 +4,7 @@ from flask_login import UserMixin
 from sqlalchemy import JSON
 
 class User(UserMixin, db.Model):
-    __tablename__ = 'user'  # Ajoutez cette ligne explicitement
+    __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(100), unique=True, nullable=False)
     password = db.Column(db.String(100), nullable=False)
@@ -29,7 +29,7 @@ class User(UserMixin, db.Model):
         return self.permissions and permission in self.permissions
 
 class Produits(db.Model):
-    __tablename__ = 'produits'  # Ajoutez aussi pour les autres modèles pour être cohérent
+    __tablename__ = 'produits'
     id = db.Column(db.Integer, primary_key=True)
     nom = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(200))
@@ -66,18 +66,22 @@ class Factures(db.Model):
     montant_cash = db.Column(db.Float, default=0)
     montant_credit = db.Column(db.Float, default=0)
     a_ete_en_credit = db.Column(db.Boolean, default=False)
-
+    type_livraison = db.Column(db.String(20), default='sur_place')
+    lieu_retrait = db.Column(db.String(50), nullable=True)
+    
     ventes = db.relationship('Ventes', backref='facture', lazy=True)
 
     def __repr__(self):
         return f"<Facture {self.id} pour {self.nom_client}>"
+
 class Paiements(db.Model):
+    __tablename__ = 'paiements'
     id = db.Column(db.Integer, primary_key=True)
     facture_id = db.Column(db.Integer, db.ForeignKey('factures.id'), nullable=False)
     montant = db.Column(db.Float, nullable=False)
     date_paiement = db.Column(db.DateTime, nullable=False, default=datetime.now)
     description = db.Column(db.String(200))
-    mode_paiement = db.Column(db.String(50), default='cash')  # cash, mobile_money, virement, etc.
+    mode_paiement = db.Column(db.String(50), default='cash')
     
     facture = db.relationship('Factures', backref=db.backref('paiements', lazy=True))
 
@@ -129,7 +133,7 @@ class Depenses(db.Model):
 
 class TransactionDepot(db.Model):
     __tablename__ = 'transaction_depot'
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     produit_id = db.Column(db.Integer, db.ForeignKey('produits.id'), nullable=False)
     quantite = db.Column(db.Integer, nullable=False)
     type_transaction = db.Column(db.String(10), nullable=False)
@@ -137,6 +141,9 @@ class TransactionDepot(db.Model):
     description = db.Column(db.Text, nullable=True)
 
     produit = db.relationship('Produits', backref='transactions_depot')
+
+    def __repr__(self):
+        return f"<TransactionDepot {self.id} - Produit {self.produit_id}>"
 
 class Caisse(db.Model):
     __tablename__ = 'caisse'
@@ -146,6 +153,9 @@ class Caisse(db.Model):
     description = db.Column(db.String(200))
     date_transaction = db.Column(db.DateTime, nullable=False, default=datetime.now)
 
+    def __repr__(self):
+        return f"<Caisse {self.id} - {self.type_transaction} {self.montant}>"
+
 class CompteBancaire(db.Model):
     __tablename__ = 'compte_bancaire'
     id = db.Column(db.Integer, primary_key=True)
@@ -153,6 +163,9 @@ class CompteBancaire(db.Model):
     montant = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
     date_transaction = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+    def __repr__(self):
+        return f"<CompteBancaire {self.id} - {self.type_transaction} {self.montant}>"
 
 class ProduitsEnRoute(db.Model):
     __tablename__ = 'produits_en_route'
@@ -167,3 +180,28 @@ class ProduitsEnRoute(db.Model):
 
     def __repr__(self):
         return f"<ProduitEnRoute {self.id} - Produit {self.produit_id} - Qte {self.quantite}>"
+
+class LivraisonDepot(db.Model):
+    __tablename__ = 'livraison_depot'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    facture_id = db.Column(db.Integer, db.ForeignKey('factures.id'), nullable=False)
+    statut = db.Column(db.String(20), default='en_attente')
+    lieu_retrait = db.Column(db.String(50), default='depot_principal')
+    date_commande = db.Column(db.DateTime, default=datetime.utcnow)
+    date_preparation = db.Column(db.DateTime, nullable=True)
+    date_livree = db.Column(db.DateTime, nullable=True)
+    vendeur_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    prepareur_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    frais_livraison = db.Column(db.Float, default=0)
+    
+    facture = db.relationship('Factures', backref='livraison_depot')
+    vendeur = db.relationship('User', foreign_keys=[vendeur_id])
+    prepareur = db.relationship('User', foreign_keys=[prepareur_id])
+
+    def __repr__(self):
+        return f"<LivraisonDepot {self.id} - Facture {self.facture_id}>"
+
+# Supprimer la table ProduitLivraison car elle n'est plus nécessaire
+# avec le système simplifié
