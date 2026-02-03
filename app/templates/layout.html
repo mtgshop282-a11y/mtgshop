@@ -72,6 +72,7 @@
             text-decoration: none;
             transition: all 0.3s;
             border-left: 3px solid transparent;
+            cursor: pointer;
         }
 
         .nav-link:hover {
@@ -238,6 +239,15 @@
         @media (max-width: 991px) {
             .close-menu {
                 display: block;
+            }
+            
+            /* Amélioration pour mobile */
+            .nav-link {
+                padding: 15px 20px;
+            }
+            
+            .nav-dropdown {
+                padding-left: 30px;
             }
         }
 
@@ -468,7 +478,7 @@
         {% if current_user.is_authenticated %}
             <!-- Produits -->
             {% if current_user.has_permission('gestion_produits') or current_user.has_permission('voir_stock_boutique') or current_user.has_permission('voir_stock_globale') %}
-                <a href="#produits" class="nav-link dropdown-toggle" id="dropdown-produits">
+                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-produits">
                     <i class="fas fa-cubes"></i> <span>Produits</span>
                 </a>
                 <div class="nav-dropdown" id="nav-dropdown-produits">
@@ -498,7 +508,7 @@
 
             <!-- Ventes -->
             {% if current_user.has_permission('gestion_ventes') or current_user.has_permission('voir_historique_vente') %}
-                <a href="#ventes" class="nav-link dropdown-toggle" id="dropdown-ventes">
+                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-ventes">
                     <i class="fas fa-shopping-cart"></i> <span>Ventes</span>
                 </a>
                 <div class="nav-dropdown" id="nav-dropdown-ventes">
@@ -527,7 +537,7 @@
 
             <!-- Dépenses -->
             {% if current_user.has_permission('gestion_depenses_ordinaires') or current_user.has_permission('gestion_depenses_recurrentes') %}
-                <a href="#depenses" class="nav-link dropdown-toggle" id="dropdown-depenses">
+                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-depenses">
                     <i class="fas fa-money-bill-wave"></i> <span>Dépenses</span>
                 </a>
                 <div class="nav-dropdown" id="nav-dropdown-depenses">
@@ -546,7 +556,7 @@
 
             <!-- Dépôt -->
             {% if current_user.has_permission('gestion_depot') or current_user.has_permission('voir_stock_depot') or current_user.has_permission('gestion_livraisons') %}
-                <a href="#depot" class="nav-link dropdown-toggle" id="dropdown-depot">
+                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-depot">
                     <i class="fas fa-warehouse"></i> <span>Dépôt</span>
                 </a>
                 <div class="nav-dropdown" id="nav-dropdown-depot">
@@ -682,56 +692,59 @@
     <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
     
-    <!-- Custom JS -->
+    <!-- Custom JS - VERSION SIMPLIFIÉE ET FONCTIONNELLE -->
     <script>
-        // Gestion du menu mobile
+        // Gestion du menu mobile - SIMPLIFIÉE
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebar-overlay');
         const menuToggle = document.getElementById('menu-toggle');
         const closeMenu = document.getElementById('close-menu');
 
-        menuToggle.addEventListener('click', () => {
-            sidebar.classList.toggle('open');
-            sidebarOverlay.style.display = sidebar.classList.contains('open') ? 'block' : 'none';
-        });
+        // Fonction pour ouvrir/fermer le menu
+        function toggleMenu() {
+            const isOpen = sidebar.classList.toggle('open');
+            sidebarOverlay.style.display = isOpen ? 'block' : 'none';
+            
+            // Empêcher le défilement du body quand le menu est ouvert
+            document.body.style.overflow = isOpen ? 'hidden' : '';
+        }
 
-        closeMenu.addEventListener('click', () => {
+        // Fonction pour fermer le menu
+        function closeSidebar() {
             sidebar.classList.remove('open');
             sidebarOverlay.style.display = 'none';
-        });
+            document.body.style.overflow = '';
+        }
 
-        sidebarOverlay.addEventListener('click', () => {
-            sidebar.classList.remove('open');
-            sidebarOverlay.style.display = 'none';
-        });
+        menuToggle.addEventListener('click', toggleMenu);
+        closeMenu.addEventListener('click', closeSidebar);
+        sidebarOverlay.addEventListener('click', closeSidebar);
 
-        // Gestion des dropdowns au clic
+        // Gestion des dropdowns - VERSION SIMPLIFIÉE ET FIABLE
         document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
-            toggle.addEventListener('click', (e) => {
+            toggle.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
                 
                 // Fermer les autres dropdowns
                 document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-                    if (dropdown.id !== toggle.id.replace('dropdown-', 'nav-dropdown-')) {
+                    if (dropdown !== this.nextElementSibling) {
                         dropdown.classList.remove('open');
-                        const otherToggle = document.getElementById(toggle.id === 'dropdown-' + dropdown.id.replace('nav-dropdown-', '') ? '' : '');
-                        if (otherToggle) otherToggle.classList.remove('active');
+                        dropdown.previousElementSibling?.classList.remove('active');
                     }
                 });
                 
                 // Ouvrir/fermer le dropdown courant
-                const dropdownId = toggle.getAttribute('id').replace('dropdown-', 'nav-dropdown-');
-                const dropdown = document.getElementById(dropdownId);
-                if (dropdown) {
+                const dropdown = this.nextElementSibling;
+                if (dropdown && dropdown.classList.contains('nav-dropdown')) {
                     dropdown.classList.toggle('open');
-                    toggle.classList.toggle('active');
+                    this.classList.toggle('active');
                 }
             });
         });
 
-        // Fermer les dropdowns en cliquant à l'extérieur
-        document.addEventListener('click', (e) => {
+        // Fermer les dropdowns quand on clique ailleurs
+        document.addEventListener('click', function(e) {
             if (!e.target.closest('.dropdown-toggle') && !e.target.closest('.nav-dropdown')) {
                 document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
                     dropdown.classList.remove('open');
@@ -742,12 +755,11 @@
             }
         });
 
-        // Fermer le menu mobile après clic sur un lien
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => {
+        // Fermer le menu sur mobile après clic sur un lien
+        document.querySelectorAll('.nav-link[href^="/"]').forEach(link => {
+            link.addEventListener('click', function(e) {
                 if (window.innerWidth < 992) {
-                    sidebar.classList.remove('open');
-                    sidebarOverlay.style.display = 'none';
+                    closeSidebar();
                 }
             });
         });
@@ -761,49 +773,43 @@
             }
         }
 
-        // Exécuter après le chargement
+        // Initialiser la page
         document.addEventListener('DOMContentLoaded', function() {
             updatePageTitle();
             
-            // Activer le dropdown correspondant à la page active
+            // Marquer le lien actif
             const currentPath = window.location.pathname;
-            document.querySelectorAll('.nav-link').forEach(link => {
+            document.querySelectorAll('.nav-link[href^="/"]').forEach(link => {
                 if (link.getAttribute('href') === currentPath) {
                     link.classList.add('active');
                     
-                    // Ouvrir le parent dropdown si nécessaire
+                    // Ouvrir le dropdown parent si nécessaire
                     const parentDropdown = link.closest('.nav-dropdown');
                     if (parentDropdown) {
                         parentDropdown.classList.add('open');
-                        const toggleId = parentDropdown.id.replace('nav-dropdown-', 'dropdown-');
-                        const toggle = document.getElementById(toggleId);
-                        if (toggle) toggle.classList.add('active');
+                        const toggle = parentDropdown.previousElementSibling;
+                        if (toggle && toggle.classList.contains('dropdown-toggle')) {
+                            toggle.classList.add('active');
+                        }
                     }
                 }
             });
             
-            // Initialiser les tooltips Bootstrap
+            // Initialiser Bootstrap components
             var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
             var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
                 return new bootstrap.Tooltip(tooltipTriggerEl);
             });
-
-            // Initialiser les popovers Bootstrap
-            var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
-            var popoverList = popoverTriggerList.map(function (popoverTriggerEl) {
-                return new bootstrap.Popover(popoverTriggerEl);
-            });
         });
 
-        // Redimensionnement de la fenêtre
+        // Gestion du redimensionnement
         window.addEventListener('resize', function() {
             if (window.innerWidth >= 992) {
-                sidebar.classList.remove('open');
-                sidebarOverlay.style.display = 'none';
+                closeSidebar();
             }
         });
 
-        // Fonctions utilitaires pour AJAX (seront utilisées par ventes_ajax.js)
+        // Fonctions utilitaires pour AJAX
         window.showLoading = function() {
             document.getElementById('loading-overlay').classList.add('active');
         };
@@ -828,7 +834,6 @@
             
             container.appendChild(notification);
             
-            // Supprimer automatiquement après la durée spécifiée
             setTimeout(() => {
                 if (notification.parentNode) {
                     notification.style.opacity = '0';
@@ -840,7 +845,6 @@
                     }, 500);
                 }
                 
-                // Cacher le conteneur s'il n'y a plus de notifications
                 if (container.children.length === 0) {
                     container.style.display = 'none';
                 }
@@ -856,34 +860,18 @@
             }
         }
 
-        // Fonction pour confirmer les actions
-        window.confirmAction = function(message, callback) {
-            if (confirm(message)) {
-                callback();
-            }
-        };
-
-        // Fonction pour gérer les erreurs AJAX
-        window.handleAjaxError = function(error, defaultMessage = 'Une erreur est survenue') {
-            console.error('Erreur AJAX:', error);
-            showNotification(
-                error.response?.data?.message || error.message || defaultMessage,
-                'error'
-            );
-        };
-
-        // Intercepter les soumissions de formulaire pour éviter les rechargements
+        // Gestion des formulaires AJAX
         document.addEventListener('submit', function(e) {
             const form = e.target;
             
-            // Si le formulaire a une classe 'ajax-form', on l'intercepte
             if (form.classList.contains('ajax-form')) {
                 e.preventDefault();
+                
+                showLoading();
                 
                 const formData = new FormData(form);
                 const data = Object.fromEntries(formData.entries());
                 
-                // Envoyer les données via AJAX
                 fetch(form.action, {
                     method: form.method,
                     headers: {
@@ -893,17 +881,17 @@
                 })
                 .then(response => response.json())
                 .then(data => {
+                    hideLoading();
                     if (data.success) {
                         showNotification(data.message, 'success');
-                        if (typeof window.onAjaxSuccess === 'function') {
-                            window.onAjaxSuccess(data);
-                        }
                     } else {
                         showNotification(data.message, 'error');
                     }
                 })
                 .catch(error => {
-                    handleAjaxError(error);
+                    hideLoading();
+                    showNotification('Erreur lors de la requête', 'error');
+                    console.error('Erreur:', error);
                 });
             }
         });
