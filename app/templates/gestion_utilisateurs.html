@@ -1,13 +1,13 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="container mt-5">
+<div class="container-fluid mt-3 mt-md-5 px-2 px-md-3">
     <!-- Messages Flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="container mt-3">
+            <div class="container-fluid px-0">
                 {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
                         {{ message }}
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
@@ -17,252 +17,432 @@
     {% endwith %}
 
     <!-- Titre avec icône -->
-    <h2>
+    <h2 class="mb-4">
         <i class="fas fa-users-cog"></i> Gestion des Utilisateurs
     </h2>
 
     <!-- Formulaire pour ajouter un utilisateur -->
     <div class="card mb-4">
         <div class="card-header">
-            <h5><i class="fas fa-user-plus"></i> Ajouter un Utilisateur</h5>
+            <h5 class="mb-0"><i class="fas fa-user-plus"></i> Ajouter un Utilisateur</h5>
         </div>
         <div class="card-body">
             <form method="POST" enctype="multipart/form-data">
                 <input type="hidden" name="user_id" id="user_id" value="">
-                <div class="mb-3">
-                    <label for="email" class="form-label">Email</label>
-                    <input type="email" class="form-control" id="email" name="email" required>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <label for="email" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="email" name="email" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="password" class="form-label">Mot de passe</label>
+                        <input type="password" class="form-control" id="password" name="password" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="firstname" class="form-label">Prénom</label>
+                        <input type="text" class="form-control" id="firstname" name="firstname" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="lastname" class="form-label">Nom</label>
+                        <input type="text" class="form-control" id="lastname" name="lastname" required>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="role" class="form-label">Rôle</label>
+                        <select class="form-select" id="role" name="role" required>
+                            <option value="vendeur">Vendeur</option>
+                            <option value="Financier">Financier</option>
+                            <option value="Amagasinier">Amagasinier</option>
+                            <option value="admin">Administrateur</option>
+                        </select>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <label for="photo" class="form-label">Photo</label>
+                        <input type="file" class="form-control" id="photo" name="photo" accept="image/*">
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" name="ajouter_utilisateur" class="btn btn-success w-100 w-md-auto">
+                            <i class="fas fa-user-plus"></i> Ajouter
+                        </button>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label for="password" class="form-label">Mot de passe</label>
-                    <input type="password" class="form-control" id="password" name="password" required>
-                </div>
-                <div class="mb-3">
-                    <label for="firstname" class="form-label">Prénom</label>
-                    <input type="text" class="form-control" id="firstname" name="firstname" required>
-                </div>
-                <div class="mb-3">
-                    <label for="lastname" class="form-label">Nom</label>
-                    <input type="text" class="form-control" id="lastname" name="lastname" required>
-                </div>
-                <div class="mb-3">
-                    <label for="role" class="form-label">Rôle</label>
-                    <select class="form-control" id="role" name="role" required>
-                        <option value="vendeur">Vendeur</option>
-                        <option value="Financier">Financier</option>
-                        <option value="Amagasinier">Amagasinier</option>
-                        <option value="admin">Administrateur</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="photo" class="form-label">Photo</label>
-                    <input type="file" class="form-control" id="photo" name="photo">
-                </div>
-                <button type="submit" name="ajouter_utilisateur" class="btn btn-success">
-                    <i class="fas fa-user-plus"></i> Ajouter
-                </button>
             </form>
         </div>
     </div>
 
     <!-- Liste des utilisateurs existants -->
     <div class="card">
-        <div class="card-header">
-            <h5><i class="fas fa-users"></i> Liste des Utilisateurs</h5>
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-users"></i> Liste des Utilisateurs</h5>
+            <span class="badge bg-primary">{{ utilisateurs|length }} utilisateur(s)</span>
         </div>
-        <div class="card-body">
-            <table class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Email</th>
-                        <th>Prénom</th>
-                        <th>Nom</th>
-                        <th>Rôle</th>
-                        <th>Permissions</th> <!-- Colonne pour les permissions -->
-                        <th>Photo</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for utilisateur in utilisateurs %}
-                    <tr>
-                        <td>{{ utilisateur.id }}</td>
-                        <td>{{ utilisateur.email }}</td>
-                        <td>{{ utilisateur.firstname }}</td>
-                        <td>{{ utilisateur.lastname }}</td>
-                        <td>{{ utilisateur.role }}</td>
-                        <td>
-                            <!-- Bouton compact pour les permissions -->
-                            <button class="btn btn-info btn-sm btn-permissions" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#modalModifierPermissions{{ utilisateur.id }}"
-                                    data-bs-toggle="tooltip" 
-                                    data-bs-placement="top" 
-                                    title="Voir/Modifier les permissions">
-                                <i class="fas fa-key"></i> <!-- Icône pour les permissions -->
-                                <span class="badge {% if utilisateur.permissions %}bg-success{% else %}bg-danger{% endif %}">
-                                    {% if utilisateur.permissions %}
-                                        {{ utilisateur.permissions | length }}
-                                    {% else %}
-                                        0
-                                    {% endif %}
+        <div class="card-body p-0 p-md-3">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th scope="col" class="d-none d-md-table-cell">ID</th>
+                            <th scope="col">Email</th>
+                            <th scope="col" class="d-none d-sm-table-cell">Prénom</th>
+                            <th scope="col" class="d-none d-sm-table-cell">Nom</th>
+                            <th scope="col">Rôle</th>
+                            <th scope="col" class="d-none d-lg-table-cell">Permissions</th>
+                            <th scope="col" class="d-none d-md-table-cell">Photo</th>
+                            <th scope="col">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for utilisateur in utilisateurs %}
+                        <tr>
+                            <td class="d-none d-md-table-cell">{{ utilisateur.id }}</td>
+                            <td>
+                                <div class="d-flex flex-column">
+                                    <span>{{ utilisateur.email }}</span>
+                                    <small class="text-muted d-block d-sm-none">
+                                        {{ utilisateur.firstname }} {{ utilisateur.lastname }}
+                                    </small>
+                                </div>
+                            </td>
+                            <td class="d-none d-sm-table-cell">{{ utilisateur.firstname }}</td>
+                            <td class="d-none d-sm-table-cell">{{ utilisateur.lastname }}</td>
+                            <td>
+                                <span class="badge 
+                                    {% if utilisateur.role == 'admin' %}bg-danger
+                                    {% elif utilisateur.role == 'Financier' %}bg-warning text-dark
+                                    {% elif utilisateur.role == 'Amagasinier' %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ utilisateur.role }}
                                 </span>
-                            </button>
-                        </td>
-                        <td>
-                            {% if utilisateur.photo %}
-                            <img src="{{ url_for('static', filename=utilisateur.photo) }}" alt="Photo de {{ utilisateur.firstname }}" width="50" class="img-thumbnail">
-                            {% else %}
-                            <span class="text-muted">Pas de photo</span>
-                            {% endif %}
-                        </td>
-                        <td>
-                            <!-- Alignement des boutons côte à côte -->
-                            <div class="d-flex gap-2">
-                                <!-- Bouton pour ouvrir le modal de modification -->
-                                <button class="btn btn-warning btn-sm" data-bs-toggle="modal" data-bs-target="#modalModifierUtilisateur{{ utilisateur.id }}">
-                                    <i class="fas fa-edit"></i> Modifier
+                            </td>
+                            <td class="d-none d-lg-table-cell">
+                                <button class="btn btn-info btn-sm btn-permissions" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalModifierPermissions{{ utilisateur.id }}"
+                                        data-bs-toggle="tooltip" 
+                                        data-bs-placement="top" 
+                                        title="Voir/Modifier les permissions">
+                                    <i class="fas fa-key"></i>
+                                    <span class="badge {% if utilisateur.permissions %}bg-success{% else %}bg-danger{% endif %}">
+                                        {% if utilisateur.permissions %}
+                                            {{ utilisateur.permissions | length }}
+                                        {% else %}
+                                            0
+                                        {% endif %}
+                                    </span>
                                 </button>
-                                <!-- Bouton pour ouvrir le modal de suppression -->
-                                <button class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalSupprimerUtilisateur{{ utilisateur.id }}">
-                                    <i class="fas fa-trash"></i> Supprimer
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-
-                    <!-- Modal pour modifier un utilisateur -->
-                    <div class="modal fade" id="modalModifierUtilisateur{{ utilisateur.id }}" tabindex="-1" aria-labelledby="modalModifierUtilisateurLabel{{ utilisateur.id }}" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="modalModifierUtilisateurLabel{{ utilisateur.id }}">
-                                        <i class="fas fa-edit"></i> Modifier l'Utilisateur
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </td>
+                            <td class="d-none d-md-table-cell">
+                                {% if utilisateur.photo %}
+                                <img src="{{ url_for('static', filename=utilisateur.photo) }}" 
+                                     alt="Photo de {{ utilisateur.firstname }}" 
+                                     width="50" 
+                                     height="50"
+                                     class="img-thumbnail rounded-circle object-fit-cover">
+                                {% else %}
+                                <div class="avatar-placeholder bg-secondary text-white rounded-circle d-flex align-items-center justify-content-center"
+                                     style="width: 50px; height: 50px;">
+                                    <i class="fas fa-user"></i>
                                 </div>
-                                <div class="modal-body">
-                                    <form method="POST" enctype="multipart/form-data">
-                                        <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
-                                        <div class="mb-3">
-                                            <label for="email{{ utilisateur.id }}" class="form-label">Email</label>
-                                            <input type="email" class="form-control" id="email{{ utilisateur.id }}" name="email" value="{{ utilisateur.email }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="password{{ utilisateur.id }}" class="form-label">Nouveau mot de passe (laisser vide pour ne pas changer)</label>
-                                            <input type="password" class="form-control" id="password{{ utilisateur.id }}" name="password">
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="firstname{{ utilisateur.id }}" class="form-label">Prénom</label>
-                                            <input type="text" class="form-control" id="firstname{{ utilisateur.id }}" name="firstname" value="{{ utilisateur.firstname }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="lastname{{ utilisateur.id }}" class="form-label">Nom</label>
-                                            <input type="text" class="form-control" id="lastname{{ utilisateur.id }}" name="lastname" value="{{ utilisateur.lastname }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="role{{ utilisateur.id }}" class="form-label">Rôle</label>
-                                            <select class="form-control" id="role{{ utilisateur.id }}" name="role" required>
-                                                <option value="vendeur" {% if utilisateur.role == 'vendeur' %}selected{% endif %}>Vendeur</option>
-                                                <option value="Financier" {% if utilisateur.role == 'Financier' %}selected{% endif %}>Financier</option>
-                                                <option value="Amagasinier" {% if utilisateur.role == 'Amagasinier' %}selected{% endif %}>Amagasinier</option>
-                                                <option value="admin" {% if utilisateur.role == 'admin' %}selected{% endif %}>Administrateur</option>
-                                            </select>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="photo{{ utilisateur.id }}" class="form-label">Photo</label>
-                                            <input type="file" class="form-control" id="photo{{ utilisateur.id }}" name="photo">
-                                        </div>
-                                        <button type="submit" name="modifier_utilisateur" class="btn btn-warning">
-                                            <i class="fas fa-save"></i> Enregistrer
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Modal pour supprimer un utilisateur -->
-                    <div class="modal fade" id="modalSupprimerUtilisateur{{ utilisateur.id }}" tabindex="-1" aria-labelledby="modalSupprimerUtilisateurLabel{{ utilisateur.id }}" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="modalSupprimerUtilisateurLabel{{ utilisateur.id }}">
-                                        <i class="fas fa-trash"></i> Supprimer l'Utilisateur
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <p>Êtes-vous sûr de vouloir supprimer l'utilisateur <strong>{{ utilisateur.firstname }} {{ utilisateur.lastname }}</strong> ?</p>
-                                </div>
-                                <div class="modal-footer">
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-                                        <i class="fas fa-times"></i> Annuler
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex flex-wrap gap-1">
+                                    <!-- Bouton permissions visible sur mobile -->
+                                    <button class="btn btn-info btn-sm d-lg-none" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalModifierPermissions{{ utilisateur.id }}"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-placement="top" 
+                                            title="Permissions">
+                                        <i class="fas fa-key"></i>
                                     </button>
-                                    <form action="{{ url_for('routes.gestion_utilisateurs') }}" method="POST" style="display:inline;">
-                                        <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
-                                        <button type="submit" name="supprimer_utilisateur" class="btn btn-danger">
-                                            <i class="fas fa-trash"></i> Supprimer
-                                        </button>
-                                    </form>
+                                    
+                                    <!-- Bouton modifier -->
+                                    <button class="btn btn-warning btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalModifierUtilisateur{{ utilisateur.id }}"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-placement="top" 
+                                            title="Modifier">
+                                        <i class="fas fa-edit d-none d-sm-inline"></i>
+                                        <span class="d-sm-none">Modif</span>
+                                    </button>
+                                    
+                                    <!-- Bouton supprimer -->
+                                    <button class="btn btn-danger btn-sm" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalSupprimerUtilisateur{{ utilisateur.id }}"
+                                            data-bs-toggle="tooltip" 
+                                            data-bs-placement="top" 
+                                            title="Supprimer">
+                                        <i class="fas fa-trash d-none d-sm-inline"></i>
+                                        <span class="d-sm-none">Supp</span>
+                                    </button>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Modal pour modifier les permissions -->
-                    <div class="modal fade" id="modalModifierPermissions{{ utilisateur.id }}" tabindex="-1" aria-labelledby="modalModifierPermissionsLabel{{ utilisateur.id }}" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title" id="modalModifierPermissionsLabel{{ utilisateur.id }}">
-                                        <i class="fas fa-key"></i> Modifier les Permissions
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <form method="POST" action="{{ url_for('routes.gestion_utilisateurs') }}">
-                                        <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
-                                        <div class="mb-3">
-                                            <label>Permissions :</label>
-                                            {% for permission in all_permissions %}
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" name="permissions" value="{{ permission }}"
-                                                    {% if utilisateur.permissions and permission in utilisateur.permissions %}checked{% endif %}>
-                                                <label class="form-check-label">{{ permission }}</label>
-                                            </div>
-                                            {% endfor %}
-                                        </div>
-                                        <button type="submit" name="modifier_permissions" class="btn btn-primary">
-                                            <i class="fas fa-save"></i> Enregistrer
-                                        </button>
-                                    </form>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </tbody>
-            </table>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Message si aucun utilisateur -->
+            {% if not utilisateurs %}
+            <div class="text-center py-5">
+                <i class="fas fa-users fa-3x text-muted mb-3"></i>
+                <p class="text-muted">Aucun utilisateur trouvé.</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
+<!-- Modals générés pour chaque utilisateur -->
+{% for utilisateur in utilisateurs %}
+<!-- Modal pour modifier un utilisateur -->
+<div class="modal fade" id="modalModifierUtilisateur{{ utilisateur.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> Modifier l'Utilisateur
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label for="email{{ utilisateur.id }}" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email{{ utilisateur.id }}" name="email" value="{{ utilisateur.email }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="password{{ utilisateur.id }}" class="form-label">Nouveau mot de passe</label>
+                            <input type="password" class="form-control" id="password{{ utilisateur.id }}" name="password" placeholder="Laisser vide pour ne pas changer">
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="firstname{{ utilisateur.id }}" class="form-label">Prénom</label>
+                            <input type="text" class="form-control" id="firstname{{ utilisateur.id }}" name="firstname" value="{{ utilisateur.firstname }}" required>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label for="lastname{{ utilisateur.id }}" class="form-label">Nom</label>
+                            <input type="text" class="form-control" id="lastname{{ utilisateur.id }}" name="lastname" value="{{ utilisateur.lastname }}" required>
+                        </div>
+                        <div class="col-12">
+                            <label for="role{{ utilisateur.id }}" class="form-label">Rôle</label>
+                            <select class="form-select" id="role{{ utilisateur.id }}" name="role" required>
+                                <option value="vendeur" {% if utilisateur.role == 'vendeur' %}selected{% endif %}>Vendeur</option>
+                                <option value="Financier" {% if utilisateur.role == 'Financier' %}selected{% endif %}>Financier</option>
+                                <option value="Amagasinier" {% if utilisateur.role == 'Amagasinier' %}selected{% endif %}>Amagasinier</option>
+                                <option value="admin" {% if utilisateur.role == 'admin' %}selected{% endif %}>Administrateur</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label for="photo{{ utilisateur.id }}" class="form-label">Photo</label>
+                            <input type="file" class="form-control" id="photo{{ utilisateur.id }}" name="photo" accept="image/*">
+                            {% if utilisateur.photo %}
+                            <div class="mt-2">
+                                <small>Photo actuelle :</small>
+                                <img src="{{ url_for('static', filename=utilisateur.photo) }}" 
+                                     alt="Photo actuelle" 
+                                     width="50" 
+                                     class="img-thumbnail rounded-circle ms-2">
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="modal-footer mt-4 px-0">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" name="modifier_utilisateur" class="btn btn-warning">
+                            <i class="fas fa-save"></i> Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour supprimer un utilisateur -->
+<div class="modal fade" id="modalSupprimerUtilisateur{{ utilisateur.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-trash"></i> Confirmer la suppression
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="fas fa-exclamation-triangle fa-3x text-warning"></i>
+                </div>
+                <p>Êtes-vous sûr de vouloir supprimer l'utilisateur ?</p>
+                <div class="alert alert-danger">
+                    <strong>{{ utilisateur.firstname }} {{ utilisateur.lastname }}</strong><br>
+                    <small>{{ utilisateur.email }}</small>
+                </div>
+                <p class="text-muted"><small>Cette action est irréversible.</small></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                <form action="{{ url_for('routes.gestion_utilisateurs') }}" method="POST" class="d-inline">
+                    <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
+                    <button type="submit" name="supprimer_utilisateur" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Supprimer définitivement
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal pour modifier les permissions -->
+<div class="modal fade" id="modalModifierPermissions{{ utilisateur.id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-key"></i> Permissions pour {{ utilisateur.firstname }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('routes.gestion_utilisateurs') }}">
+                    <input type="hidden" name="user_id" value="{{ utilisateur.id }}">
+                    <div class="mb-3">
+                        <label class="form-label">Sélectionnez les permissions :</label>
+                        <div class="permissions-grid">
+                            {% for permission in all_permissions %}
+                            <div class="form-check mb-2">
+                                <input class="form-check-input" type="checkbox" name="permissions" value="{{ permission }}"
+                                    id="perm_{{ utilisateur.id }}_{{ loop.index }}"
+                                    {% if utilisateur.permissions and permission in utilisateur.permissions %}checked{% endif %}>
+                                <label class="form-check-label" for="perm_{{ utilisateur.id }}_{{ loop.index }}">
+                                    {{ permission }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="modal-footer px-0">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                        <button type="submit" name="modifier_permissions" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Enregistrer
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
 <!-- Script pour activer les tooltips -->
 <script>
     // Activer les tooltips Bootstrap
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Gestion responsive des modals
+        function adjustModalPadding() {
+            var modals = document.querySelectorAll('.modal-dialog');
+            if (window.innerWidth < 768) {
+                modals.forEach(function(modal) {
+                    modal.classList.add('mx-2');
+                });
+            } else {
+                modals.forEach(function(modal) {
+                    modal.classList.remove('mx-2');
+                });
+            }
+        }
+        
+        // Ajuster au chargement et au redimensionnement
+        adjustModalPadding();
+        window.addEventListener('resize', adjustModalPadding);
     });
 </script>
 
-<!-- Style pour l'animation au survol -->
+<!-- Styles responsive -->
 <style>
+    /* Styles généraux responsive */
+    .container-fluid {
+        max-width: 1400px;
+    }
+    
+    /* Ajustements des tables sur mobile */
+    @media (max-width: 768px) {
+        .table-responsive {
+            border: none;
+            margin: 0 -1rem;
+            padding: 0 1rem;
+        }
+        
+        .table {
+            font-size: 0.9rem;
+        }
+        
+        .btn-sm {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.8rem;
+        }
+    }
+    
+    @media (max-width: 576px) {
+        .card-body {
+            padding: 1rem;
+        }
+        
+        .table {
+            font-size: 0.85rem;
+        }
+        
+        .modal-dialog {
+            margin: 0.5rem;
+        }
+    }
+    
+    /* Avatar placeholder */
+    .avatar-placeholder {
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+    }
+    
+    /* Bouton permissions */
     .btn-permissions:hover {
-        transform: scale(1.05); /* Agrandir légèrement le bouton au survol */
+        transform: scale(1.05);
         transition: transform 0.2s ease-in-out;
+    }
+    
+    /* Ajustements pour très petits écrans */
+    @media (max-width: 360px) {
+        .d-flex.gap-1 .btn {
+            padding: 0.2rem 0.4rem;
+            font-size: 0.75rem;
+        }
+        
+        .badge {
+            font-size: 0.7rem;
+        }
+    }
+    
+    /* Grid pour les permissions dans les modals */
+    .permissions-grid {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        border: 1px solid #dee2e6;
+        border-radius: 5px;
+    }
+    
+    /* Image responsive */
+    .object-fit-cover {
+        object-fit: cover;
     }
 </style>
 {% endblock %}

@@ -1,386 +1,813 @@
 {% extends "layout.html" %}
 
-{% block title %}Entrées et sorties des produits{% endblock %}
+{% block title %}Entrées et sorties des produits - MKM Shop{% endblock %}
+
+{% block page_title %}<i class="fas fa-exchange-alt me-2"></i> Entrées et sorties des produits{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-5 text-center"><i class="fas fa-exchange-alt"></i> Entrées et sorties des produits</h1>
-
-    <!-- Afficher les messages flash -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <!-- Formulaire pour ajouter une transaction -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2C3E50;">
-            <h5 class="card-title mb-0"><i class="fas fa-plus-circle me-2"></i> Ajouter une transaction</h5>
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+        <div class="mb-3 mb-md-0">
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-exchange-alt text-primary me-2"></i>Entrées et sorties des produits
+            </h1>
+            <p class="text-muted small mb-0">Gérez les mouvements de stock de vos produits</p>
         </div>
-        <div class="card-body" style="background-color: #F8F9FA;">
-            <form id="transactionForm" action="{{ url_for('routes.ajouter_transaction') }}" method="POST">
-                <!-- Bouton pour ouvrir la modale de sélection des produits -->
-                <div class="mb-4">
-                    <button type="button" class="btn btn-primary w-100" data-bs-toggle="modal" data-bs-target="#produitModal">
-                        <i class="fas fa-search me-2"></i> Sélectionner un produit
-                    </button>
-                </div>
-
-                <!-- Champ pour afficher le nom du produit sélectionné -->
-                <div class="mb-4">
-                    <label for="nom_produit" class="form-label text-dark fw-bold">Produit sélectionné</label>
-                    <input type="text" id="nom_produit" class="form-control" readonly>
-                </div>
-
-                <!-- Champ caché pour l'ID du produit -->
-                <input type="hidden" id="produit_id" name="produit_id">
-
-                <!-- Sélection du type de transaction -->
-                <div class="mb-4">
-                    <label for="type" class="form-label text-dark fw-bold">Type de transaction</label>
-                    <select class="form-select" id="type" name="type" required>
-                        <option value="entree">Entrée</option>
-                        <option value="sortie">Sortie</option>
-                    </select>
-                </div>
-
-                <!-- Champ de quantité -->
-                <div class="mb-4">
-                    <label for="quantite" class="form-label text-dark fw-bold">Quantité</label>
-                    <input type="number" class="form-control" id="quantite" name="quantite" required>
-                </div>
-
-                <!-- Champ de description -->
-                <div class="mb-4">
-                    <label for="description" class="form-label text-dark fw-bold">Description</label>
-                    <textarea class="form-control" id="description" name="description" rows="3" placeholder="Ajouter une description..."></textarea>
-                </div>
-
-                <!-- Bouton de soumission -->
-                <button type="submit" class="btn text-white w-100 py-2 fw-bold" style="background-color: #2980B9;">
-                    <i class="fas fa-save me-2"></i> Ajouter
-                </button>
-            </form>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-primary fs-6">
+                <i class="fas fa-history me-1"></i>
+                <span>{{ transactions|length }}</span> transaction(s)
+            </span>
         </div>
     </div>
 
-    <!-- Modale pour la sélection des produits -->
-    <div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="produitModalLabel">Sélectionner un produit</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <!-- Cartes principales -->
+    <div class="row g-4">
+        <!-- Formulaire d'ajout -->
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center">
+                        <i class="fas fa-plus-circle me-2"></i> Ajouter une transaction
+                    </h5>
                 </div>
-                <div class="modal-body">
-                    <!-- Champ de recherche dans la modale -->
-                    <div class="mb-3">
-                        <input type="text" id="searchProduitModal" class="form-control" placeholder="Rechercher un produit...">
-                    </div>
+                <div class="card-body">
+                    <!-- Messages flash -->
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'danger' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %} me-2"></i>
+                                        <div>{{ message }}</div>
+                                    </div>
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
 
-                    <!-- Liste des produits dans la modale -->
-                    <div id="produitListModal" class="list-group">
-                        {% for produit in produits %}
-                        <a href="#" class="list-group-item list-group-item-action" data-id="{{ produit.id }}" data-nom="{{ produit.nom }}">
-                            {{ produit.nom }} ({{ produit.quantite }} en stock)
-                        </a>
-                        {% endfor %}
-                    </div>
+                    <form id="transactionForm" action="{{ url_for('routes.ajouter_transaction') }}" method="POST">
+                        <!-- Sélection du produit -->
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">
+                                <i class="fas fa-box text-primary me-1"></i> Produit
+                            </label>
+                            <div class="input-group">
+                                <button type="button" class="btn btn-outline-primary w-100 d-flex align-items-center justify-content-center" 
+                                        data-bs-toggle="modal" data-bs-target="#produitModal">
+                                    <i class="fas fa-search me-2"></i> Sélectionner un produit
+                                </button>
+                            </div>
+                            <div class="mt-2" id="selected-product-display" style="display: none;">
+                                <div class="alert alert-info py-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <i class="fas fa-check-circle text-success me-2"></i>
+                                            <span id="selected-product-name" class="fw-semibold"></span>
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearProductSelection()">
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <input type="hidden" id="produit_id" name="produit_id" required>
+
+                        <!-- Type de transaction -->
+                        <div class="mb-3">
+                            <label for="type" class="form-label fw-semibold">
+                                <i class="fas fa-exchange-alt text-primary me-1"></i> Type de transaction
+                            </label>
+                            <div class="d-flex gap-2">
+                                <div class="form-check flex-fill">
+                                    <input class="form-check-input" type="radio" name="type" id="type_entree" value="entree" checked>
+                                    <label class="form-check-label w-100 p-3 text-center border rounded" for="type_entree">
+                                        <i class="fas fa-arrow-down text-success d-block mb-2 fs-4"></i>
+                                        <span class="fw-semibold">Entrée</span>
+                                        <small class="d-block text-muted">Ajout de stock</small>
+                                    </label>
+                                </div>
+                                <div class="form-check flex-fill">
+                                    <input class="form-check-input" type="radio" name="type" id="type_sortie" value="sortie">
+                                    <label class="form-check-label w-100 p-3 text-center border rounded" for="type_sortie">
+                                        <i class="fas fa-arrow-up text-danger d-block mb-2 fs-4"></i>
+                                        <span class="fw-semibold">Sortie</span>
+                                        <small class="d-block text-muted">Retrait de stock</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quantité -->
+                        <div class="mb-3">
+                            <label for="quantite" class="form-label fw-semibold">
+                                <i class="fas fa-hashtag text-primary me-1"></i> Quantité
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">
+                                    <i class="fas fa-boxes"></i>
+                                </span>
+                                <input type="number" class="form-control" id="quantite" name="quantite" 
+                                       required min="1" placeholder="Quantité">
+                            </div>
+                        </div>
+
+                        <!-- Description -->
+                        <div class="mb-3">
+                            <label for="description" class="form-label fw-semibold">
+                                <i class="fas fa-align-left text-primary me-1"></i> Description
+                            </label>
+                            <textarea class="form-control" id="description" name="description" 
+                                      rows="3" placeholder="Raison de la transaction (optionnel)"></textarea>
+                        </div>
+
+                        <!-- Bouton de soumission -->
+                        <button type="submit" class="btn btn-primary w-100 py-2 d-flex align-items-center justify-content-center">
+                            <i class="fas fa-save me-2"></i> Enregistrer la transaction
+                        </button>
+                    </form>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+            </div>
+        </div>
+
+        <!-- Statistiques rapides (SIMPLIFIÉES) -->
+        <div class="col-12 col-lg-6">
+            <div class="card shadow-sm border-0 h-100">
+                <div class="card-header bg-gradient-info text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center">
+                        <i class="fas fa-chart-bar me-2"></i> Vue d'ensemble
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-6 col-md-3 col-lg-6">
+                            <div class="card bg-light border-0 text-center py-3">
+                                <div class="card-body">
+                                    <i class="fas fa-arrow-down fa-2x text-success mb-2"></i>
+                                    <h4 class="mb-0 fw-bold">
+                                        {% set total_entrees = transactions|selectattr('type', 'equalto', 'entree')|sum(attribute='quantite') %}
+                                        {{ total_entrees or 0 }}
+                                    </h4>
+                                    <small class="text-muted">Total entrées</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3 col-lg-6">
+                            <div class="card bg-light border-0 text-center py-3">
+                                <div class="card-body">
+                                    <i class="fas fa-arrow-up fa-2x text-danger mb-2"></i>
+                                    <h4 class="mb-0 fw-bold">
+                                        {% set total_sorties = transactions|selectattr('type', 'equalto', 'sortie')|sum(attribute='quantite') %}
+                                        {{ total_sorties or 0 }}
+                                    </h4>
+                                    <small class="text-muted">Total sorties</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3 col-lg-6">
+                            <div class="card bg-light border-0 text-center py-3">
+                                <div class="card-body">
+                                    <i class="fas fa-balance-scale fa-2x text-warning mb-2"></i>
+                                    <h4 class="mb-0 fw-bold">
+                                        {{ (total_entrees or 0) - (total_sorties or 0) }}
+                                    </h4>
+                                    <small class="text-muted">Balance totale</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-6 col-md-3 col-lg-6">
+                            <div class="card bg-light border-0 text-center py-3">
+                                <div class="card-body">
+                                    <i class="fas fa-clock fa-2x text-primary mb-2"></i>
+                                    <h4 class="mb-0 fw-bold">{{ transactions|length }}</h4>
+                                    <small class="text-muted">Total transactions</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Données historiques complètes
+                        </small>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Liste des transactions -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #27AE60;">
-            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i> Historique des transactions</h5>
-            <div class="row mt-3 g-3">
-                <!-- Filtre de recherche -->
-                <div class="col-md-3">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchTransaction" class="form-control" placeholder="Rechercher une transaction...">
+    <!-- Historique des transactions -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-gradient-success text-white py-3">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                        <h5 class="card-title mb-0 d-flex align-items-center mb-3 mb-md-0">
+                            <i class="fas fa-history me-2"></i> Historique des transactions
+                        </h5>
+                        <div class="d-flex flex-wrap gap-2 w-100 w-md-auto">
+                            <div class="flex-grow-1" style="min-width: 200px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white">
+                                        <i class="fas fa-search text-muted"></i>
+                                    </span>
+                                    <input type="text" id="searchTransaction" class="form-control" 
+                                           placeholder="Rechercher...">
+                                </div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button id="resetFilters" class="btn btn-light btn-sm d-flex align-items-center">
+                                    <i class="fas fa-sync-alt me-1"></i>
+                                    <span class="d-none d-md-inline">Réinitialiser</span>
+                                </button>
+                                <button id="printButton" class="btn btn-light btn-sm d-flex align-items-center">
+                                    <i class="fas fa-print me-1"></i>
+                                    <span class="d-none d-md-inline">Imprimer</span>
+                                </button>
+                                <button id="exportButton" class="btn btn-light btn-sm d-flex align-items-center">
+                                    <i class="fas fa-file-export me-1"></i>
+                                    <span class="d-none d-md-inline">Exporter</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Filtres avancés -->
+                    <div class="row mt-3 g-2">
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white">
+                                    <i class="fas fa-calendar-start text-muted"></i>
+                                </span>
+                                <input type="date" id="filterDateStart" class="form-control" 
+                                       placeholder="Date début">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white">
+                                    <i class="fas fa-calendar-end text-muted"></i>
+                                </span>
+                                <input type="date" id="filterDateEnd" class="form-control" 
+                                       placeholder="Date fin">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white">
+                                    <i class="fas fa-filter text-muted"></i>
+                                </span>
+                                <select id="filterType" class="form-select">
+                                    <option value="">Tous types</option>
+                                    <option value="entree">Entrées</option>
+                                    <option value="sortie">Sorties</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text bg-white">
+                                    <i class="fas fa-sort-amount-down text-muted"></i>
+                                </span>
+                                <select id="filterSort" class="form-select">
+                                    <option value="date_desc">Plus récent</option>
+                                    <option value="date_asc">Plus ancien</option>
+                                    <option value="quantite_desc">Quantité ↓</option>
+                                    <option value="quantite_asc">Quantité ↑</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <!-- Filtre de date de début -->
-                <div class="col-md-3">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                        <input type="date" id="filterDateStart" class="form-control" placeholder="Date de début">
-                    </div>
-                </div>
-                <!-- Filtre de date de fin -->
-                <div class="col-md-3">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-calendar-alt"></i></span>
-                        <input type="date" id="filterDateEnd" class="form-control" placeholder="Date de fin">
-                    </div>
-                </div>
-                <!-- Filtre de type -->
-                <div class="col-md-3">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-filter"></i></span>
-                        <select id="filterType" class="form-select">
-                            <option value="">Tous les types</option>
-                            <option value="entree">Entrée</option>
-                            <option value="sortie">Sortie</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-            <!-- Boutons de réinitialisation et d'impression -->
-            <div class="mt-3">
-                <button id="resetFilters" class="btn btn-secondary btn-sm me-2">
-                    <i class="fas fa-sync-alt me-2"></i>Réinitialiser les filtres
-                </button>
-                <button id="printButton" class="btn btn-light btn-sm">
-                    <i class="fas fa-print me-2"></i>Imprimer
-                </button>
-            </div>
-        </div>
-        <div class="card-body" style="background-color: #F8F9FA;">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="text-center"><i class="fas fa-calendar-alt me-2"></i>Date</th>
-                            <th class="text-center"><i class="fas fa-box me-2"></i>Produit</th>
-                            <th class="text-center"><i class="fas fa-exchange-alt me-2"></i>Type</th>
-                            <th class="text-center"><i class="fas fa-hashtag me-2"></i>Quantité</th>
-                            <th class="text-center"><i class="fas fa-align-left me-2"></i>Description</th>
-                        </tr>
-                    </thead>
-                    <tbody id="transactionTableBody">
-                        {% for transaction in transactions %}
-                        <tr data-type="{{ transaction.type }}" data-date="{{ transaction.date_transaction.strftime('%Y-%m-%d') }}">
-                            <td class="text-center">{{ transaction.date_transaction.strftime('%d/%m/%Y %H:%M') }}</td>
-                            <td class="text-center">{{ transaction.produit.nom }}</td>
-                            <td class="text-center">
-                                {% if transaction.type == 'entree' %}
-                                    <span class="badge" style="background-color: #2ECC71;"><i class="fas fa-arrow-down me-2"></i>Entrée</span>
+                
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-center">
+                                        <i class="fas fa-calendar me-1"></i> Date
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-box me-1"></i> Produit
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-exchange-alt me-1"></i> Type
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-hashtag me-1"></i> Quantité
+                                    </th>
+                                    <th class="text-center d-none d-lg-table-cell">
+                                        <i class="fas fa-align-left me-1"></i> Description
+                                    </th>
+                                    <th class="text-center d-none d-md-table-cell">
+                                        <i class="fas fa-user me-1"></i> Utilisateur
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="transactionTableBody">
+                                {% for transaction in transactions %}
+                                <tr data-type="{{ transaction.type }}" 
+                                    data-date="{{ transaction.date_transaction.strftime('%Y-%m-%d') if transaction.date_transaction else '' }}"
+                                    data-quantite="{{ transaction.quantite }}"
+                                    data-nom="{{ transaction.produit.nom|lower if transaction.produit else '' }}">
+                                    <td class="text-center">
+                                        {% if transaction.date_transaction %}
+                                            <small class="text-muted d-block">{{ transaction.date_transaction.strftime('%d/%m/%Y') }}</small>
+                                            <small class="text-muted">{{ transaction.date_transaction.strftime('%H:%M') }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center fw-semibold">
+                                        {% if transaction.produit %}
+                                            {{ transaction.produit.nom }}
+                                            {% if transaction.produit.quantite < 10 %}
+                                                <span class="badge bg-danger ms-1">{{ transaction.produit.quantite }}</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">Produit supprimé</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if transaction.type == 'entree' %}
+                                            <span class="badge bg-success d-inline-flex align-items-center">
+                                                <i class="fas fa-arrow-down me-1"></i> Entrée
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger d-inline-flex align-items-center">
+                                                <i class="fas fa-arrow-up me-1"></i> Sortie
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="fw-bold {% if transaction.type == 'entree' %}text-success{% else %}text-danger{% endif %}">
+                                            {% if transaction.type == 'entree' %}+{% else %}-{% endif %}{{ transaction.quantite }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center d-none d-lg-table-cell">
+                                        {% if transaction.description %}
+                                            <span class="text-truncate d-inline-block" style="max-width: 200px;" 
+                                                  title="{{ transaction.description }}">
+                                                {{ transaction.description }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center d-none d-md-table-cell">
+                                        <small class="text-muted">
+                                            {% if transaction.utilisateur %}
+                                                {{ transaction.utilisateur.username }}
+                                            {% else %}
+                                                Système
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                </tr>
                                 {% else %}
-                                    <span class="badge" style="background-color: #E74C3C;"><i class="fas fa-arrow-up me-2"></i>Sortie</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">{{ transaction.quantite }}</td>
-                            <td class="text-center">{{ transaction.description }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            <!-- Message si aucun résultat n'est trouvé -->
-            <div id="noResults" class="text-center mt-4" style="display: none;">
-                <i class="fas fa-exclamation-circle fa-2x text-muted"></i>
-                <p class="mt-2 text-muted">Aucune transaction ne correspond à vos critères de recherche.</p>
+                                <tr>
+                                    <td colspan="6" class="text-center py-5">
+                                        <i class="fas fa-exchange-alt fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted">Aucune transaction trouvée</h5>
+                                        <p class="text-muted">Commencez par ajouter une transaction</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Résumé des filtres -->
+                <div class="card-footer bg-light py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <small class="text-muted">
+                            <span id="visible-count">{{ transactions|length }}</span> transaction(s) affichée(s)
+                        </small>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            Dernière mise à jour : Maintenant
+                        </small>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Script pour la gestion des transactions -->
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchProduitModal = document.getElementById('searchProduitModal');
-        const produitListModal = document.getElementById('produitListModal');
-        const produitIdInput = document.getElementById('produit_id');
-        const nomProduitInput = document.getElementById('nom_produit');
-        const searchTransaction = document.getElementById('searchTransaction');
-        const filterDateStart = document.getElementById('filterDateStart');
-        const filterDateEnd = document.getElementById('filterDateEnd');
-        const filterType = document.getElementById('filterType');
-        const resetFilters = document.getElementById('resetFilters');
-        const printButton = document.getElementById('printButton');
-        const transactionTableBody = document.getElementById('transactionTableBody');
-        const noResults = document.getElementById('noResults');
+<!-- Modale pour la sélection des produits -->
+<div class="modal fade" id="produitModal" tabindex="-1" aria-labelledby="produitModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="produitModalLabel">
+                    <i class="fas fa-boxes me-2"></i> Sélectionner un produit
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Recherche -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light">
+                            <i class="fas fa-search text-muted"></i>
+                        </span>
+                        <input type="text" id="searchProduitModal" class="form-control" 
+                               placeholder="Rechercher un produit par nom...">
+                    </div>
+                </div>
 
-        // Recherche dans la modale
+                <!-- Liste des produits -->
+                <div id="produitListModal" class="list-group" style="max-height: 400px; overflow-y: auto;">
+                    {% for produit in produits %}
+                    <a href="#" class="list-group-item list-group-item-action produit-item" 
+                       data-id="{{ produit.id }}" 
+                       data-nom="{{ produit.nom }}"
+                       data-stock="{{ produit.quantite }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-0 fw-semibold">{{ produit.nom }}</h6>
+                                {% if produit.description %}
+                                    <small class="text-muted">{{ produit.description[:50] }}{% if produit.description|length > 50 %}...{% endif %}</small>
+                                {% endif %}
+                            </div>
+                            <div class="text-end">
+                                <span class="badge {% if produit.quantite > 10 %}bg-success{% elif produit.quantite > 0 %}bg-warning{% else %}bg-danger{% endif %}">
+                                    {{ produit.quantite }} en stock
+                                </span>
+                                <small class="d-block text-muted mt-1">
+                                    Prix: {{ produit.prix }} $
+                                </small>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i> Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<!-- Le script JavaScript reste exactement le même que dans la version précédente -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Variables globales
+    const produitModal = document.getElementById('produitModal');
+    const searchProduitModal = document.getElementById('searchProduitModal');
+    const produitListModal = document.getElementById('produitListModal');
+    const produitIdInput = document.getElementById('produit_id');
+    const selectedProductDisplay = document.getElementById('selected-product-display');
+    const selectedProductName = document.getElementById('selected-product-name');
+    const transactionForm = document.getElementById('transactionForm');
+    
+    // Recherche dans la modale
+    if (searchProduitModal && produitListModal) {
         searchProduitModal.addEventListener('input', function() {
-            const query = searchProduitModal.value.toLowerCase();
-            const produits = produitListModal.querySelectorAll('.list-group-item');
-            produits.forEach(produit => {
-                const produitText = produit.textContent.toLowerCase();
-                if (produitText.includes(query)) {
-                    produit.style.display = 'block';
-                } else {
-                    produit.style.display = 'none';
-                }
+            const query = this.value.toLowerCase().trim();
+            const items = produitListModal.querySelectorAll('.produit-item');
+            
+            items.forEach(item => {
+                const nom = item.getAttribute('data-nom').toLowerCase();
+                const display = query === '' || nom.includes(query);
+                item.style.display = display ? 'block' : 'none';
             });
         });
+    }
 
-        // Sélection d'un produit dans la modale
-        produitListModal.addEventListener('click', function(event) {
-            if (event.target.classList.contains('list-group-item')) {
-                const produit = event.target;
-                produitIdInput.value = produit.dataset.id; // Remplir l'ID du produit
-                nomProduitInput.value = produit.dataset.nom; // Remplir le nom du produit
-                bootstrap.Modal.getInstance(document.getElementById('produitModal')).hide(); // Fermer la modale
+    // Sélection d'un produit
+    if (produitListModal) {
+        produitListModal.addEventListener('click', function(e) {
+            e.preventDefault();
+            const item = e.target.closest('.produit-item');
+            if (item) {
+                const id = item.getAttribute('data-id');
+                const nom = item.getAttribute('data-nom');
+                const stock = item.getAttribute('data-stock');
+                
+                produitIdInput.value = id;
+                selectedProductName.textContent = `${nom} (${stock} en stock)`;
+                selectedProductDisplay.style.display = 'block';
+                
+                // Fermer la modale
+                const modal = bootstrap.Modal.getInstance(produitModal);
+                if (modal) modal.hide();
+                
+                // Mettre le focus sur la quantité
+                document.getElementById('quantite').focus();
             }
         });
+    }
 
-        // Gestion des filtres pour le tableau des transactions
-        function filterTransactions() {
-            const searchTerm = searchTransaction.value.toLowerCase();
-            const filterDateStartValue = filterDateStart.value;
-            const filterDateEndValue = filterDateEnd.value;
-            const filterTypeValue = filterType.value.toLowerCase();
-            const rows = transactionTableBody.getElementsByTagName('tr');
-            let visibleRows = 0;
+    // Effacer la sélection du produit
+    window.clearProductSelection = function() {
+        produitIdInput.value = '';
+        selectedProductDisplay.style.display = 'none';
+        selectedProductName.textContent = '';
+    };
 
-            for (let row of rows) {
-                const type = row.getAttribute('data-type');
-                const date = row.getAttribute('data-date');
-                const cells = row.getElementsByTagName('td');
-                let matchSearch = false;
-                let matchDate = true;
-                let matchType = true;
-
-                // Filtre par recherche
-                for (let cell of cells) {
-                    if (cell.textContent.toLowerCase().includes(searchTerm)) {
-                        matchSearch = true;
-                        break;
-                    }
-                }
-
-                // Filtre par plage de dates
-                if (filterDateStartValue && date < filterDateStartValue) {
-                    matchDate = false;
-                }
-                if (filterDateEndValue && date > filterDateEndValue) {
-                    matchDate = false;
-                }
-
-                // Filtre par type
-                if (filterTypeValue && type !== filterTypeValue) {
-                    matchType = false;
-                }
-
-                // Afficher ou masquer la ligne en fonction des filtres
-                if (matchSearch && matchDate && matchType) {
-                    row.style.display = '';
-                    visibleRows++;
-                } else {
-                    row.style.display = 'none';
-                }
+    // Validation du formulaire
+    if (transactionForm) {
+        transactionForm.addEventListener('submit', function(e) {
+            if (!produitIdInput.value) {
+                e.preventDefault();
+                alert('Veuillez sélectionner un produit');
+                return false;
             }
+            
+            const quantite = parseInt(document.getElementById('quantite').value);
+            if (quantite < 1) {
+                e.preventDefault();
+                alert('La quantité doit être supérieure à 0');
+                return false;
+            }
+            
+            return true;
+        });
+    }
 
-            // Afficher un message si aucun résultat n'est trouvé
-            noResults.style.display = visibleRows === 0 ? 'block' : 'none';
+    // Filtrage des transactions
+    const searchTransaction = document.getElementById('searchTransaction');
+    const filterDateStart = document.getElementById('filterDateStart');
+    const filterDateEnd = document.getElementById('filterDateEnd');
+    const filterType = document.getElementById('filterType');
+    const filterSort = document.getElementById('filterSort');
+    const resetFilters = document.getElementById('resetFilters');
+    const transactionTableBody = document.getElementById('transactionTableBody');
+    const visibleCount = document.getElementById('visible-count');
+
+    function filterAndSortTransactions() {
+        const searchTerm = searchTransaction ? searchTransaction.value.toLowerCase().trim() : '';
+        const dateStart = filterDateStart ? filterDateStart.value : '';
+        const dateEnd = filterDateEnd ? filterDateEnd.value : '';
+        const typeFilter = filterType ? filterType.value : '';
+        const sortBy = filterSort ? filterSort.value : 'date_desc';
+        
+        const rows = transactionTableBody.querySelectorAll('tr[data-type]');
+        let visibleRows = [];
+        
+        // Filtrer
+        rows.forEach(row => {
+            const nom = row.getAttribute('data-nom') || '';
+            const date = row.getAttribute('data-date');
+            const type = row.getAttribute('data-type');
+            const quantite = parseInt(row.getAttribute('data-quantite'));
+            
+            // Filtre de recherche
+            const searchMatch = searchTerm === '' || nom.includes(searchTerm);
+            
+            // Filtre de date
+            const dateMatch = (dateStart === '' || date >= dateStart) && 
+                            (dateEnd === '' || date <= dateEnd);
+            
+            // Filtre de type
+            const typeMatch = typeFilter === '' || type === typeFilter;
+            
+            if (searchMatch && dateMatch && typeMatch) {
+                row.style.display = '';
+                visibleRows.push({row, date, quantite});
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Trier
+        visibleRows.sort((a, b) => {
+            switch(sortBy) {
+                case 'date_asc':
+                    return (a.date || '').localeCompare(b.date || '');
+                case 'quantite_desc':
+                    return b.quantite - a.quantite;
+                case 'quantite_asc':
+                    return a.quantite - b.quantite;
+                default: // date_desc
+                    return (b.date || '').localeCompare(a.date || '');
+            }
+        });
+        
+        // Réorganiser dans le DOM
+        visibleRows.forEach(item => {
+            transactionTableBody.appendChild(item.row);
+        });
+        
+        // Mettre à jour le compteur
+        if (visibleCount) {
+            visibleCount.textContent = visibleRows.length;
         }
+    }
 
-        // Réinitialiser les filtres
+    // Écouteurs d'événements pour les filtres
+    if (searchTransaction) searchTransaction.addEventListener('input', filterAndSortTransactions);
+    if (filterDateStart) filterDateStart.addEventListener('change', filterAndSortTransactions);
+    if (filterDateEnd) filterDateEnd.addEventListener('change', filterAndSortTransactions);
+    if (filterType) filterType.addEventListener('change', filterAndSortTransactions);
+    if (filterSort) filterSort.addEventListener('change', filterAndSortTransactions);
+
+    // Réinitialiser les filtres
+    if (resetFilters) {
         resetFilters.addEventListener('click', function() {
-            searchTransaction.value = '';
-            filterDateStart.value = '';
-            filterDateEnd.value = '';
-            filterType.value = '';
-            filterTransactions();
+            if (searchTransaction) searchTransaction.value = '';
+            if (filterDateStart) filterDateStart.value = '';
+            if (filterDateEnd) filterDateEnd.value = '';
+            if (filterType) filterType.value = '';
+            if (filterSort) filterSort.value = 'date_desc';
+            filterAndSortTransactions();
         });
+    }
 
-        // Imprimer l'historique des transactions
+    // Imprimer
+    const printButton = document.getElementById('printButton');
+    if (printButton) {
         printButton.addEventListener('click', function() {
-            const printContents = `
-                <div style="text-align: center; margin-bottom: 20px;">
-                    <h1 style="font-size: 24px; margin-bottom: 10px;">Nom de l'entreprise</h1>
-                    <h3 style="font-size: 18px; margin-bottom: 10px;">Historique des transactions</h3>
-                    <p style="font-size: 14px; color: #555;">
-                        Période : ${filterDateStart.value || 'Toutes dates'} - ${filterDateEnd.value || 'Toutes dates'}
-                    </p>
-                    <p style="font-size: 12px; color: #777;">
-                        Date d'impression : ${new Date().toLocaleString()}
-                    </p>
-                </div>
-                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                    <thead>
-                        <tr style="background-color: #f2f2f2;">
-                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Date</th>
-                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Produit</th>
-                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Type</th>
-                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Quantité</th>
-                            <th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Description</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${Array.from(transactionTableBody.querySelectorAll('tr'))
-                            .filter(row => row.style.display !== 'none')
-                            .map(row => `
-                                <tr>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[0].textContent}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[1].textContent}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[2].innerHTML}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[3].textContent}</td>
-                                    <td style="border: 1px solid #ddd; padding: 8px;">${row.cells[4].textContent}</td>
-                                </tr>
-                            `).join('')}
-                    </tbody>
-                </table>
-            `;
-
-            const printWindow = window.open('', '', 'height=600,width=800');
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Historique des transactions</title>
-                        <style>
-                            body { font-family: Arial, sans-serif; margin: 20px; }
-                            table { width: 100%; border-collapse: collapse; }
-                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                            th { background-color: #f2f2f2; }
-                            .badge { padding: 5px; border-radius: 5px; }
-                        </style>
-                    </head>
-                    <body>
-                        ${printContents}
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.print();
+            const visibleRows = Array.from(transactionTableBody.querySelectorAll('tr[data-type]'))
+                .filter(row => row.style.display !== 'none');
+            
+            if (visibleRows.length === 0) {
+                alert('Aucune transaction à imprimer');
+                return;
+            }
+            
+            const printContents = generatePrintContent(visibleRows);
+            openPrintWindow(printContents);
         });
+    }
 
-        // Appliquer les filtres lors de la modification des champs
-        searchTransaction.addEventListener('input', filterTransactions);
-        filterDateStart.addEventListener('change', filterTransactions);
-        filterDateEnd.addEventListener('change', filterTransactions);
-        filterType.addEventListener('change', filterTransactions);
-    });
+    // Exporter
+    const exportButton = document.getElementById('exportButton');
+    if (exportButton) {
+        exportButton.addEventListener('click', function() {
+            const visibleRows = Array.from(transactionTableBody.querySelectorAll('tr[data-type]'))
+                .filter(row => row.style.display !== 'none');
+            
+            if (visibleRows.length === 0) {
+                alert('Aucune transaction à exporter');
+                return;
+            }
+            
+            exportToCSV(visibleRows);
+        });
+    }
+
+    function generatePrintContent(rows) {
+        const today = new Date().toLocaleDateString();
+        const time = new Date().toLocaleTimeString();
+        
+        let html = `
+            <div class="print-header">
+                <h1>MKM Shop</h1>
+                <h3>Historique des transactions</h3>
+                <p>Généré le ${today} à ${time}</p>
+                <hr>
+            </div>
+            <table class="print-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Produit</th>
+                        <th>Type</th>
+                        <th>Quantité</th>
+                        <th>Description</th>
+                        <th>Utilisateur</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        rows.forEach(row => {
+            const cells = row.cells;
+            html += `
+                <tr>
+                    <td>${cells[0].innerHTML}</td>
+                    <td>${cells[1].textContent}</td>
+                    <td>${cells[2].innerHTML}</td>
+                    <td>${cells[3].textContent}</td>
+                    <td>${cells[4] ? cells[4].textContent : '-'}</td>
+                    <td>${cells[5] ? cells[5].textContent : '-'}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                </tbody>
+            </table>
+            <div class="print-footer">
+                <p>Total : ${rows.length} transaction(s)</p>
+            </div>
+        `;
+        
+        return html;
+    }
+
+    function openPrintWindow(content) {
+        const printWindow = window.open('', '_blank', 'width=800,height=600');
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Transactions - MKM Shop</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .print-header { text-align: center; margin-bottom: 30px; }
+                    .print-header h1 { color: #2c3e50; margin-bottom: 5px; }
+                    .print-header h3 { color: #555; margin-bottom: 10px; }
+                    .print-header p { color: #777; }
+                    hr { border: 1px solid #ddd; margin: 20px 0; }
+                    .print-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                    .print-table th { background-color: #f8f9fa; border: 1px solid #ddd; padding: 10px; text-align: left; }
+                    .print-table td { border: 1px solid #ddd; padding: 8px; }
+                    .print-footer { margin-top: 30px; text-align: center; color: #777; }
+                    @media print {
+                        body { margin: 0; }
+                        @page { margin: 20mm; }
+                    }
+                </style>
+            </head>
+            <body>
+                ${content}
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(() => window.close(), 1000);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
+    function exportToCSV(rows) {
+        let csv = 'Date;Produit;Type;Quantité;Description;Utilisateur\n';
+        
+        rows.forEach(row => {
+            const cells = row.cells;
+            const date = cells[0].textContent.replace(/\n/g, ' ').trim();
+            const produit = cells[1].textContent.replace(/;/g, ',');
+            const type = cells[2].textContent.trim();
+            const quantite = cells[3].textContent.trim();
+            const description = (cells[4] ? cells[4].textContent : '-').replace(/;/g, ',');
+            const utilisateur = (cells[5] ? cells[5].textContent : '-').replace(/;/g, ',');
+            
+            csv += `"${date}";"${produit}";"${type}";"${quantite}";"${description}";"${utilisateur}"\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `transactions_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Initialiser les filtres
+    filterAndSortTransactions();
+});
 </script>
 
 <style>
-    /* Ajouter des styles pour améliorer l'apparence du tableau */
-    .table {
-        width: 100%;
-        border-collapse: collapse;
+    /* Styles spécifiques pour la page */
+    .produit-item {
+        transition: all 0.2s;
     }
-
-    .table th, .table td {
-        padding: 12px;
-        text-align: center;
-        border: 1px solid #ddd;
-    }
-
-    .table th {
+    
+    .produit-item:hover {
         background-color: #f8f9fa;
-        font-weight: bold;
+        transform: translateX(3px);
     }
-
-    .table-striped tbody tr:nth-of-type(odd) {
-        background-color: #f9f9f9;
+    
+    /* Styles responsive pour les tableaux */
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.9rem;
+        }
+        
+        .badge {
+            font-size: 0.75em;
+        }
     }
-
-    .table-hover tbody tr:hover {
-        background-color: #f1f1f1;
+    
+    /* Animation pour les nouvelles transactions */
+    @keyframes highlightNew {
+        from { background-color: #e8f5e8; }
+        to { background-color: transparent; }
+    }
+    
+    .new-transaction {
+        animation: highlightNew 2s ease-out;
     }
 </style>
 {% endblock %}

@@ -1,0 +1,89 @@
+<div class="modal-header">
+    <h5 class="modal-title">Détails de la livraison</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fermer"></button>
+</div>
+<div class="modal-body">
+    {% if livraison %}
+    <div class="mb-3">
+        <table class="table table-sm">
+            <tbody>
+                <tr>
+                    <th style="width:30%">ID Livraison</th>
+                    <td>{{ livraison.id }}</td>
+                </tr>
+                <tr>
+                    <th>Statut</th>
+                    <td>{{ livraison.statut }}</td>
+                </tr>
+                <tr>
+                    <th>Date commande</th>
+                    <td>{{ livraison.date_commande or 'N/A' }}</td>
+                </tr>
+                <tr>
+                    <th>Frais livraison</th>
+                    <td>{{ livraison.frais_livraison or 0 }} $</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    {% if facture %}
+    <div class="mb-3">
+        <h6>Facture associée</h6>
+        <table class="table table-sm">
+            <tbody>
+                <tr>
+                    <th>Numéro</th>
+                    <td>{{ facture.id }}</td>
+                </tr>
+                <tr>
+                    <th>Client</th>
+                    <td>{{ facture.nom_client or '---' }}</td>
+                </tr>
+                <tr>
+                    <th>Montant total</th>
+                    <td>{{ facture.montant_total or 0 }} $</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if ventes and ventes|length > 0 %}
+    <div>
+        <h6>Articles</h6>
+        <div class="table-responsive">
+            <table class="table table-sm table-striped">
+                <thead>
+                    <tr>
+                        <th>Produit</th>
+                        <th class="text-end">Quantité</th>
+                        <th class="text-end">Prix unitaire</th>
+                        <th class="text-end">Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for v in ventes %}
+                    {% set unit_price = (v.produit.prix if (v.produit and v.produit.prix is not none) else (v.montant_total / v.quantite if v.quantite else 0)) %}
+                    <tr>
+                        <td>{{ v.produit.nom if v.produit else v.produit_id }}</td>
+                        <td class="text-end">{{ v.quantite }}</td>
+                        <td class="text-end">{{ '%.2f' % unit_price }} $</td>
+                        <td class="text-end">{{ '%.2f' % (unit_price * v.quantite) }} $</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% else %}
+    <p class="text-muted">Aucun article trouvé pour cette livraison.</p>
+    {% endif %}
+
+    {% else %}
+    <p class="text-danger">Livraison introuvable.</p>
+    {% endif %}
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button>
+</div>

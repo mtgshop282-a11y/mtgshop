@@ -294,17 +294,32 @@ def api_ajouter_au_panier():
         # Récupérer les infos du produit
         produit = Produits.query.get(produit_id)
         
+        # Retourner le panier complet mis à jour
+        panier_items = Panier.query.filter_by(session_id=session_id).all()
+        
+        panier_data = []
+        total = 0
+        
+        for item in panier_items:
+            prod = Produits.query.get(item.produit_id)
+            item_total = item.quantite * item.prix
+            
+            panier_data.append({
+                'id': item.id,
+                'produit_id': item.produit_id,
+                'produit_nom': prod.nom if prod else 'Produit supprimé',
+                'quantite': item.quantite,
+                'prix': item.prix,
+                'total': item_total
+            })
+            
+            total += item_total
+        
         return jsonify({
             'success': True,
             'message': 'Produit ajouté au panier',
-            'panier_item': {
-                'id': nouveau_panier.id,
-                'produit_id': produit_id,
-                'produit_nom': produit.nom,
-                'quantite': quantite,
-                'prix': prix,
-                'total': quantite * prix
-            },
+            'panier': panier_data,
+            'total': total,
             'session_id': session_id
         })
         
@@ -662,35 +677,7 @@ def ventes():
     return render_template('ventes_ajax.html', produits=produits)
 # ==================== ROUTES DE FACTURES ====================
 
-@bp.route('/factures', methods=['GET'])
-@login_required
-@permission_required('gestion_ventes')
-def factures():
-    search_term = request.args.get('search', '')
-    start_date = request.args.get('start_date')
-    end_date = request.args.get('end_date')
-    
-    query = Factures.query
-    
-    if search_term:
-        query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
-    
-    if start_date:
-        query = query.filter(Factures.date_facture >= datetime.strptime(start_date, '%Y-%m-%d'))
-    
-    if end_date:
-        end_date_obj = datetime.strptime(end_date, '%Y-%m-%d') + timedelta(days=1)
-        query = query.filter(Factures.date_facture < end_date_obj)
-    
-    factures_list = query.order_by(Factures.date_facture.desc()).all()
-    
-    # AJOUTER CETTE LIGNE pour récupérer tous les produits
-    produits = Produits.query.order_by(Produits.nom.asc()).all()
-    
-    return render_template('factures.html', 
-                         factures=factures_list, 
-                         search_term=search_term,
-                         produits=produits)  # AJOUTÉ
+
 
 @bp.route('/factures/<int:id>', methods=['GET'])
 @login_required
@@ -1072,9 +1059,132 @@ def imprimer_recu_paiement(paiement_id):
 @login_required
 @permission_required('voir_historique_vente')
 def historique_ventes():
-    ventes = Ventes.query.join(Factures).order_by(Factures.date_facture.asc()).all()
-    return render_template('historique_ventes.html', ventes=ventes)
+    from datetime import datetime, date, timedelta
+    
+    # Récupérer toutes les ventes avec jointure
+    ventes = Ventes.query.join(Factures).join(Produits).order_by(Factures.date_facture.desc()).all()
+    
+    # Calculer les statistiques de base
+    today = date.today()
+    start_of_week = today - timedelta(days=today.weekday())
+    start_of_month = today.replace(day=1)
+    
+    # Compter les ventes par période (méthode simple)
+    ventes_ajd = sum(1 for v in ventes if v.facture and v.facture.date_facture.date() == today)
+    ventes_semaine = sum(1 for v in ventes if v.facture and v.facture.date_facture.date() >= start_of_week)
+    ventes_mois = sum(1 for v in ventes if v.facture and v.facture.date_facture.date() >= start_of_month)
+    
+    # Calculer les montants totaux
+    total_ajd = sum(v.montant_total for v in ventes if v.facture and v.facture.date_facture.date() == today)
+    total_semaine = sum(v.montant_total for v in ventes if v.facture and v.facture.date_facture.date() >= start_of_week)
+    total_mois = sum(v.montant_total for v in ventes if v.facture and v.facture.date_facture.date() >= start_of_month)
+    total_toutes = sum(v.montant_total for v in ventes)
+    
+    # Préparer les données pour le template
+    ventes_avec_details = []
+    for vente in ventes:
+        prix_unitaire = vente.montant_total / vente.quantite if vente.quantite > 0 else 0
+        
+        ventes_avec_details.append({
+            'id': vente.id,
+            'facture': vente.facture,
+            'produit': vente.produit,
+            'quantite': vente.quantite,
+            'montant_total': vente.montant_total,
+            'prix_unitaire': prix_unitaire
+        })
+    
+    stats = {
+        'ventes_ajd': ventes_ajd,
+        'ventes_semaine': ventes_semaine,
+        'ventes_mois': ventes_mois,
+        'total_ajd': total_ajd,
+        'total_semaine': total_semaine,
+        'total_mois': total_mois,
+        'total_toutes': total_toutes
+    }
+    
+    return render_template(
+        'historique_ventes.html', 
+        ventes=ventes_avec_details,
+        stats=stats,
+        current_time=datetime.now()
+    )
+# ==================== ROUTE POUR LISTER TOUTES LES FACTURES ====================
 
+@bp.route('/factures', methods=['GET'])
+@login_required
+@permission_required('gestion_ventes')
+def factures():
+    """Page pour lister toutes les factures avec filtrage"""
+    # Récupérer les paramètres de recherche
+    search_term = request.args.get('search', '').strip()
+    
+    # Construire la requête de base
+    query = Factures.query
+    
+    # Filtrer par nom client si un terme de recherche est fourni
+    if search_term:
+        query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
+    
+    # Trier par date (plus récent d'abord)
+    factures_list = query.order_by(Factures.date_facture.desc()).all()
+    
+    # Calculer les statistiques
+    total_factures = len(factures_list)
+    total_montant = sum(f.montant_total for f in factures_list)
+    total_credit = sum(f.montant_credit for f in factures_list if f.paiement_credit)
+    total_comptant = sum(f.montant_total for f in factures_list if not f.paiement_credit)
+    
+    # Calculer les statistiques temporelles
+    from datetime import datetime, timedelta
+    
+    # Aujourd'hui
+    today = datetime.now().date()
+    factures_aujourdhui = Factures.query.filter(
+        db.func.date(Factures.date_facture) == today
+    ).all()
+    
+    # Cette semaine
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    factures_semaine = Factures.query.filter(
+        db.func.date(Factures.date_facture) >= start_of_week,
+        db.func.date(Factures.date_facture) <= end_of_week
+    ).all()
+    
+    # Ce mois
+    start_of_month = today.replace(day=1)
+    next_month = today.replace(day=28) + timedelta(days=4)
+    end_of_month = next_month - timedelta(days=next_month.day)
+    factures_mois = Factures.query.filter(
+        db.func.date(Factures.date_facture) >= start_of_month,
+        db.func.date(Factures.date_facture) <= end_of_month
+    ).all()
+    
+    # Préparer les statistiques
+    stats = {
+        'ventes_ajd': len(factures_aujourdhui),
+        'total_ajd': sum(f.montant_total for f in factures_aujourdhui),
+        'ventes_semaine': len(factures_semaine),
+        'total_semaine': sum(f.montant_total for f in factures_semaine),
+        'ventes_mois': len(factures_mois),
+        'total_mois': sum(f.montant_total for f in factures_mois),
+        'total_toutes': total_montant
+    }
+    
+    # Récupérer tous les produits pour la modale de modification
+    produits = Produits.query.order_by(Produits.nom.asc()).all()
+    
+    return render_template('factures.html',
+                         factures=factures_list,
+                         produits=produits,
+                         search_term=search_term,
+                         total_factures=total_factures,
+                         total_montant=total_montant,
+                         total_credit=total_credit,
+                         total_comptant=total_comptant,
+                         stats=stats)
 # ==================== ROUTES DE DÉPENSES ====================
 
 @bp.route('/depenses_ordinaires')
@@ -1676,8 +1786,7 @@ def gestion_livraisons():
         query = query.filter_by(statut=statut_filter)
     
     # Trier par date de commande (les plus anciennes en premier)
-    livraisons = query.order_by(LivraisonDepot.date_commande.asc()).all()
-    
+    livraisons = query.order_by(LivraisonDepot.date_commande.desc()).all()
     # Compter par statut
     stats = {
         'en_attente': LivraisonDepot.query.filter_by(statut='en_attente').count(),
@@ -1691,132 +1800,30 @@ def gestion_livraisons():
                          livraisons=livraisons,
                          stats=stats,
                          statut_filter=statut_filter)
-@bp.route('/livraison/<int:id>', methods=['GET', 'POST'])
+
+
+@bp.route('/livraison/<int:id>/details-ajax')
 @login_required
 @permission_required('gestion_depot')
-def details_livraison(id):
-    """Détails et gestion d'une livraison spécifique"""
+def livraison_details_ajax(id):
+    """API pour récupérer les détails d'une livraison en AJAX"""
     
-    livraison = LivraisonDepot.query.get_or_404(id)
-    facture = livraison.facture
-    ventes = Ventes.query.filter_by(facture_id=facture.id).all()
-    # Supprimer cette ligne: produits_livraison = ProduitLivraison.query.filter_by(livraison_id=id).all()
-    
-    if request.method == 'POST':
-        action = request.form.get('action')
+    try:
+        livraison = LivraisonDepot.query.get_or_404(id)
+        facture = Factures.query.get_or_404(livraison.facture_id)
+        ventes = Ventes.query.filter_by(facture_id=facture.id).all()
         
-        try:
-            if action == 'preparer_livraison':
-                # Commencer la préparation
-                # VÉRIFIER LE STOCK DU DÉPÔT AVANT DE COMMENCER
-                stock_insuffisant = False
-                produits_manquants = []
-                
-                for vente in ventes:
-                    produit = Produits.query.get_or_404(vente.produit_id)
-                    
-                    # Vérifier le stock DÉPÔT
-                    if produit.quantite_depot < vente.quantite:
-                        stock_insuffisant = True
-                        produits_manquants.append({
-                            'nom': produit.nom,
-                            'stock_depot': produit.quantite_depot,
-                            'quantite_requise': vente.quantite
-                        })
-                
-                if stock_insuffisant:
-                    message = "Stock DÉPÔT insuffisant pour préparer la livraison:\n"
-                    for produit in produits_manquants:
-                        message += f"- {produit['nom']}: besoin {produit['quantite_requise']}, disponible {produit['stock_depot']}\n"
-                    flash(message, "danger")
-                    return redirect(url_for('routes.details_livraison', id=id))
-                
-                # Si stock suffisant, commencer la préparation
-                livraison.statut = 'en_preparation'
-                livraison.prepareur_id = current_user.id
-                livraison.date_preparation = datetime.utcnow()
-                livraison.notes = request.form.get('notes', '')
-                
-                db.session.commit()
-                flash("Livraison en préparation!", "success")
-                
-            elif action == 'confirmer_livraison':
-                # Confirmer ET livrer en une seule étape
-                # Vérifier à nouveau le stock DÉPÔT
-                for vente in ventes:
-                    produit = Produits.query.get_or_404(vente.produit_id)
-                    
-                    # Vérifier le stock DÉPÔT
-                    if produit.quantite_depot < vente.quantite:
-                        flash(f"Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot}", "danger")
-                        return redirect(url_for('routes.details_livraison', id=id))
-                
-                # Si tout est bon, déduire du stock DÉPÔT
-                for vente in ventes:
-                    produit = Produits.query.get_or_404(vente.produit_id)
-                    
-                    # Déduire du stock DÉPÔT
-                    produit.quantite_depot -= vente.quantite
-                    
-                    # Enregistrer la sortie du dépôt
-                    transaction_depot = TransactionDepot(
-                        produit_id=produit.id,
-                        type_transaction='sortie',
-                        quantite=vente.quantite,
-                        description=f"Livraison client - Facture #{facture.id} pour {facture.nom_client}"
-                    )
-                    db.session.add(transaction_depot)
-                
-                # Mettre à jour la livraison
-                livraison.statut = 'livree'
-                livraison.date_livree = datetime.utcnow()
-                frais_livraison = request.form.get('frais_livraison', 0)
-                if frais_livraison:
-                    livraison.frais_livraison = float(frais_livraison)
-                
-                db.session.commit()
-                flash("Livraison confirmée! Stock déduit du dépôt.", "success")
-                
-            elif action == 'annuler_livraison':
-                # Annuler la livraison
-                livraison.statut = 'annulee'
-                raison = request.form.get('raison', '')
-                livraison.notes = f"Annulée: {raison}"
-                
-                db.session.commit()
-                flash("Livraison annulée!", "warning")
-                
-        except Exception as e:
-            db.session.rollback()
-            flash(f"Erreur: {str(e)}", "danger")
+        # Rendre le contenu HTML des détails
+        html_content = render_template('partials/livraison_details_modal.html',
+                                      livraison=livraison,
+                                      facture=facture,
+                                      ventes=ventes)
         
-        return redirect(url_for('routes.details_livraison', id=id))
-    
-    # Vérifier le stock du dépôt pour affichage
-    stock_insuffisant = False
-    produits_avec_stock = []
-    
-    for vente in ventes:
-        produit = Produits.query.get_or_404(vente.produit_id)
-        suffisant = produit.quantite_depot >= vente.quantite
+        return html_content
         
-        if not suffisant:
-            stock_insuffisant = True
-            
-        produits_avec_stock.append({
-            'produit': produit,
-            'vente': vente,
-            'stock_depot': produit.quantite_depot,
-            'suffisant': suffisant,
-            'manquant': vente.quantite - produit.quantite_depot if not suffisant else 0
-        })
-    
-    return render_template('details_livraison.html',
-                         livraison=livraison,
-                         facture=facture,
-                         ventes=ventes,
-                         produits_avec_stock=produits_avec_stock,
-                         stock_insuffisant=stock_insuffisant)
+    except Exception as e:
+        return f'<div class="alert alert-danger"><i class="fas fa-exclamation-circle me-2"></i>Erreur: {str(e)}</div>', 404
+
 
 @bp.route('/api/livraisons/statut/<int:id>', methods=['PUT'])
 @login_required

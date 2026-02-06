@@ -1,383 +1,1171 @@
 {% extends "layout.html" %}
 
-{% block title %}Gestion des Dépenses Ordinaires{% endblock %}
+{% block title %}Gestion des Dépenses Ordinaires - MKM Shop{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-5 text-center"><i class="fas fa-money-bill-wave"></i> Gestion des Dépenses Ordinaires</h1>
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête amélioré -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-money-bill-wave me-2 text-primary"></i>Gestion des Dépenses Ordinaires
+            </h1>
+            <p class="text-muted small mb-0">Ajout, modification et suivi des dépenses quotidiennes</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-primary fs-6">
+                <i class="fas fa-coins me-1"></i>
+                {{ depenses|length }} dépense(s)
+            </span>
+        </div>
+    </div>
 
-    <!-- Afficher les messages flash -->
+    <!-- Messages flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="row mb-4">
+                <div class="col-12">
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show d-flex align-items-center" role="alert">
+                            {% if category == 'success' %}
+                                <i class="fas fa-check-circle me-2 fs-5"></i>
+                            {% elif category == 'danger' %}
+                                <i class="fas fa-exclamation-triangle me-2 fs-5"></i>
+                            {% else %}
+                                <i class="fas fa-info-circle me-2 fs-5"></i>
+                            {% endif %}
+                            <div class="flex-grow-1">{{ message }}</div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    {% endfor %}
                 </div>
-            {% endfor %}
+            </div>
         {% endif %}
     {% endwith %}
 
-    <!-- Formulaire pour ajouter une dépense ordinaire -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2C3E50;">
-            <h5 class="card-title mb-0"><i class="fas fa-plus-circle me-2"></i> Ajouter une dépense ordinaire</h5>
+    <!-- Cartes de statistiques -->
+    <div class="row g-4 mb-4">
+        <div class="col-12">
+            <div class="row g-3">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-day fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold" id="depensesAujourdhui">{{ depenses_ajd|default(0) }}</h4>
+                            <small>Aujourd'hui</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                <span id="totalAjd">{{ "%.2f"|format(total_ajd|default(0)) }}</span> $
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-week fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold" id="depensesSemaine">{{ depenses_semaine|default(0) }}</h4>
+                            <small>Cette semaine</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                <span id="totalSemaine">{{ "%.2f"|format(total_semaine|default(0)) }}</span> $
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-alt fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold" id="depensesMois">{{ depenses_mois|default(0) }}</h4>
+                            <small>Ce mois</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                <span id="totalMois">{{ "%.2f"|format(total_mois|default(0)) }}</span> $
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-chart-line fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold">{{ depenses|length }}</h4>
+                            <small>Total historique</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                <span id="totalHistorique">{{ "%.2f"|format(depenses|sum(attribute='montant')) }}</span> $
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulaire pour ajouter une dépense -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-gradient-primary text-white py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-plus-circle me-2"></i> Ajouter une dépense
+            </h5>
         </div>
         <div class="card-body">
             <form action="{{ url_for('routes.ajouter_depense') }}" method="POST">
-                <div class="mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <input type="text" class="form-control" id="description" name="description" required>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="description" class="form-label fw-semibold">
+                            <i class="fas fa-align-left text-primary me-1"></i> Description *
+                        </label>
+                        <input type="text" class="form-control" id="description" name="description" required placeholder="Ex: Achat fournitures bureau">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="montant" class="form-label fw-semibold">
+                            <i class="fas fa-dollar-sign text-primary me-1"></i> Montant *
+                        </label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" class="form-control" id="montant" name="montant" required placeholder="0.00">
+                            <span class="input-group-text">$</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="categorie" class="form-label fw-semibold">
+                            <i class="fas fa-tag text-primary me-1"></i> Catégorie
+                        </label>
+                        <input type="text" class="form-control" id="categorie" name="categorie" placeholder="Ex: Bureau, Transport, Nourriture...">
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label for="montant" class="form-label">Montant</label>
-                    <input type="number" step="0.01" class="form-control" id="montant" name="montant" required>
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-save me-2"></i> Enregistrer la dépense
+                    </button>
                 </div>
-                <div class="mb-3">
-                    <label for="categorie" class="form-label">Catégorie (optionnel)</label>
-                    <input type="text" class="form-control" id="categorie" name="categorie">
-                </div>
-                <button type="submit" class="btn text-white w-100" style="background-color: #2980B9;">
-                    <i class="fas fa-save me-2"></i> Ajouter
-                </button>
             </form>
         </div>
     </div>
 
-    <!-- Formulaire de filtrage -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2C3E50;">
-            <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i> Filtrer les Dépenses</h5>
+    <!-- Panel des filtres -->
+    <div class="card shadow-sm border-0 mb-4">
+        <div class="card-header bg-gradient-primary text-white py-3">
+            <h5 class="card-title mb-0 d-flex align-items-center">
+                <i class="fas fa-filter me-2"></i> Filtres de recherche
+            </h5>
         </div>
         <div class="card-body">
             <div class="row g-3">
-                <!-- Filtre par date de début -->
-                <div class="col-md-3">
-                    <label for="filterDateStart" class="form-label">Date de début</label>
-                    <input type="date" class="form-control" id="filterDateStart">
+                <!-- Dates -->
+                <div class="col-md-6">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label for="filterDateStart" class="form-label fw-semibold">
+                                <i class="fas fa-calendar-start text-primary me-1"></i> Date début
+                            </label>
+                            <input type="date" class="form-control" id="filterDateStart">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label for="filterDateEnd" class="form-label fw-semibold">
+                                <i class="fas fa-calendar-end text-primary me-1"></i> Date fin
+                            </label>
+                            <input type="date" class="form-control" id="filterDateEnd">
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Filtre par date de fin -->
-                <div class="col-md-3">
-                    <label for="filterDateEnd" class="form-label">Date de fin</label>
-                    <input type="date" class="form-control" id="filterDateEnd">
+                <!-- Recherches -->
+                <div class="col-md-6">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label for="filterCategorie" class="form-label fw-semibold">
+                                <i class="fas fa-tag text-primary me-1"></i> Catégorie
+                            </label>
+                            <input type="text" class="form-control" id="filterCategorie" placeholder="Filtrer par catégorie...">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label for="filterDescription" class="form-label fw-semibold">
+                                <i class="fas fa-search text-primary me-1"></i> Description
+                            </label>
+                            <input type="text" class="form-control" id="filterDescription" placeholder="Filtrer par description...">
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Filtre par catégorie -->
-                <div class="col-md-3">
-                    <label for="filterCategorie" class="form-label">Catégorie</label>
-                    <input type="text" class="form-control" id="filterCategorie" placeholder="Rechercher par catégorie...">
-                </div>
-
-                <!-- Filtre par description -->
-                <div class="col-md-3">
-                    <label for="filterDescription" class="form-label">Description</label>
-                    <input type="text" class="form-control" id="filterDescription" placeholder="Rechercher par description...">
+                <!-- Montant min/max -->
+                <div class="col-md-6">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <label for="filterMontantMin" class="form-label fw-semibold">
+                                <i class="fas fa-dollar-sign text-primary me-1"></i> Montant min
+                            </label>
+                            <input type="number" class="form-control" id="filterMontantMin" placeholder="0.00" step="0.01" min="0">
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <label for="filterMontantMax" class="form-label fw-semibold">
+                                <i class="fas fa-dollar-sign text-primary me-1"></i> Montant max
+                            </label>
+                            <input type="number" class="form-control" id="filterMontantMax" placeholder="0.00" step="0.01" min="0">
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <!-- Boutons pour réinitialiser les filtres, exporter en CSV et imprimer -->
-            <div class="mt-3 d-flex justify-content-between">
-                <button type="button" id="resetFilters" class="btn btn-secondary">
-                    <i class="fas fa-sync-alt me-2"></i> Réinitialiser les filtres
-                </button>
-                <div>
-                    <button type="button" id="exportCSV" class="btn btn-success me-2">
-                        <i class="fas fa-file-csv me-2"></i> Exporter en CSV
-                    </button>
-                    <button type="button" id="printButton" class="btn btn-primary">
-                        <i class="fas fa-print me-2"></i> Imprimer
-                    </button>
+            <!-- Boutons d'action -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <div class="d-flex flex-wrap gap-2 justify-content-between">
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" id="resetFilters" class="btn btn-outline-secondary d-flex align-items-center">
+                                <i class="fas fa-sync-alt me-2"></i>
+                                <span class="d-none d-sm-inline">Réinitialiser</span>
+                            </button>
+                            <button type="button" id="btnToday" class="btn btn-primary d-flex align-items-center">
+                                <i class="fas fa-calendar-day me-2"></i>
+                                <span class="d-none d-sm-inline">Aujourd'hui</span>
+                            </button>
+                            <button type="button" id="btnWeek" class="btn btn-primary d-flex align-items-center">
+                                <i class="fas fa-calendar-week me-2"></i>
+                                <span class="d-none d-sm-inline">Semaine</span>
+                            </button>
+                            <button type="button" id="btnMonth" class="btn btn-primary d-flex align-items-center">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                <span class="d-none d-sm-inline">Mois</span>
+                            </button>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" id="exportCSV" class="btn btn-success d-flex align-items-center">
+                                <i class="fas fa-file-csv me-2"></i>
+                                <span class="d-none d-md-inline">Exporter CSV</span>
+                            </button>
+                            <button type="button" id="printButton" class="btn btn-primary d-flex align-items-center">
+                                <i class="fas fa-print me-2"></i>
+                                <span class="d-none d-md-inline">Imprimer</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Liste des dépenses ordinaires -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #27AE60;">
-            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i> Liste des Dépenses Ordinaires</h5>
+    <!-- Résumé des filtres actifs -->
+    <div class="row mt-3" id="activeFiltersContainer" style="display: none;">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted me-2">Filtres actifs :</small>
+                            <div id="activeFilters" class="d-inline-flex flex-wrap gap-1"></div>
+                        </div>
+                        <button type="button" id="clearFilters" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-times me-1"></i> Effacer tous
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <table class="table table-striped table-hover">
-                <thead style="background-color: #2c3e50; color: white;">
-                    <tr>
-                        <th class="text-center">Description</th>
-                        <th class="text-center">Montant</th>
-                        <th class="text-center">Catégorie</th>
-                        <th class="text-center">Date</th>
-                        <th class="text-center">Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="depensesTableBody">
-                    {% for depense in depenses %}
-                    <tr data-date="{{ depense.date_depense.strftime('%Y-%m-%d') }}" data-categorie="{{ depense.categorie }}" data-description="{{ depense.description }}">
-                        <td class="text-center">{{ depense.description }}</td>
-                        <td class="text-center">{{ depense.montant }}</td>
-                        <td class="text-center">{{ depense.categorie }}</td>
-                        <td class="text-center">{{ depense.date_depense.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td class="text-center">
-                            <!-- Bouton pour modifier une dépense -->
-                            <button type="button" class="btn btn-sm text-white" style="background-color: #f39c12;" data-bs-toggle="modal" data-bs-target="#modalModifier{{ depense.id }}">
-                                <i class="fas fa-edit me-2"></i> Modifier
-                            </button>
-                            <!-- Bouton pour supprimer une dépense -->
-                            <button type="button" class="btn btn-sm btn-danger btn-supprimer" data-id="{{ depense.id }}" data-description="{{ depense.description }}">
-                                <i class="fas fa-trash me-2"></i> Supprimer
-                            </button>
-                        </td>
-                    </tr>
+    </div>
 
-                    <!-- Modal pour modifier une dépense -->
-                    <div class="modal fade" id="modalModifier{{ depense.id }}" tabindex="-1" aria-labelledby="modalModifierLabel{{ depense.id }}" aria-hidden="true">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header" style="background-color: #f39c12; color: white;">
-                                    <h5 class="modal-title" id="modalModifierLabel{{ depense.id }}">Modifier la dépense</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <!-- Liste des dépenses -->
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-gradient-success text-white py-3">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                <h5 class="card-title mb-0 d-flex align-items-center mb-3 mb-md-0">
+                    <i class="fas fa-list me-2"></i> Liste des Dépenses
+                    <span class="badge bg-light text-success ms-2 fs-6">{{ depenses|length }}</span>
+                </h5>
+                <div class="d-flex flex-wrap gap-2 w-100 w-md-auto">
+                    <div class="flex-grow-1" style="min-width: 200px;">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-white">
+                                <i class="fas fa-search text-muted"></i>
+                            </span>
+                            <input type="text" id="searchGlobal" class="form-control" 
+                                   placeholder="Rechercher dans toutes les colonnes...">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card-body p-0">
+            {% if depenses %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-center">
+                                <i class="fas fa-align-left me-1"></i> Description
+                            </th>
+                            <th class="text-center">
+                                <i class="fas fa-dollar-sign me-1"></i> Montant
+                            </th>
+                            <th class="text-center d-none d-md-table-cell">
+                                <i class="fas fa-tag me-1"></i> Catégorie
+                            </th>
+                            <th class="text-center">
+                                <i class="fas fa-calendar me-1"></i> Date
+                            </th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="depensesTableBody">
+                        {% for depense in depenses %}
+                        <tr class="depense-row" 
+                            data-id="{{ depense.id }}"
+                            data-date="{{ depense.date_depense.strftime('%Y-%m-%d') }}"
+                            data-categorie="{{ depense.categorie|default('')|lower }}"
+                            data-description="{{ depense.description|lower }}"
+                            data-montant="{{ depense.montant }}">
+                            <td class="text-center">{{ depense.description }}</td>
+                            <td class="text-center fw-bold text-danger">{{ "%.2f"|format(depense.montant) }} $</td>
+                            <td class="text-center d-none d-md-table-cell">
+                                {% if depense.categorie %}
+                                    <span class="badge bg-info">{{ depense.categorie }}</span>
+                                {% else %}
+                                    <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="d-flex flex-column">
+                                    <small class="text-muted">{{ depense.date_depense.strftime('%d/%m/%Y') }}</small>
+                                    <small class="text-muted">{{ depense.date_depense.strftime('%H:%M') }}</small>
                                 </div>
-                                <div class="modal-body">
-                                    <form action="{{ url_for('routes.modifier_depense', id=depense.id) }}" method="POST">
-                                        <div class="mb-3">
-                                            <label for="description{{ depense.id }}" class="form-label">Description</label>
-                                            <input type="text" class="form-control" id="description{{ depense.id }}" name="description" value="{{ depense.description }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="montant{{ depense.id }}" class="form-label">Montant</label>
-                                            <input type="number" step="0.01" class="form-control" id="montant{{ depense.id }}" name="montant" value="{{ depense.montant }}" required>
-                                        </div>
-                                        <div class="mb-3">
-                                            <label for="categorie{{ depense.id }}" class="form-label">Catégorie (optionnel)</label>
-                                            <input type="text" class="form-control" id="categorie{{ depense.id }}" name="categorie" value="{{ depense.categorie }}">
-                                        </div>
-                                        <button type="submit" class="btn text-white w-100" style="background-color: #f39c12;">
-                                            <i class="fas fa-save me-2"></i> Enregistrer
-                                        </button>
-                                    </form>
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button class="btn btn-outline-warning edit-depense-btn"
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalModifier{{ depense.id }}"
+                                            title="Modifier">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-outline-danger btn-supprimer"
+                                            data-id="{{ depense.id }}"
+                                            data-description="{{ depense.description }}"
+                                            title="Supprimer">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+
+                        <!-- Modal pour modifier une dépense -->
+                        <div class="modal fade" id="modalModifier{{ depense.id }}" tabindex="-1" aria-labelledby="modalModifierLabel{{ depense.id }}" aria-hidden="true">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-warning text-white">
+                                        <h5 class="modal-title" id="modalModifierLabel{{ depense.id }}">
+                                            <i class="fas fa-edit me-2"></i> Modifier la dépense
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <form action="{{ url_for('routes.modifier_depense', id=depense.id) }}" method="POST">
+                                            <div class="mb-3">
+                                                <label for="description{{ depense.id }}" class="form-label fw-semibold">Description *</label>
+                                                <input type="text" class="form-control" id="description{{ depense.id }}" name="description" value="{{ depense.description }}" required>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="montant{{ depense.id }}" class="form-label fw-semibold">Montant *</label>
+                                                <div class="input-group">
+                                                    <input type="number" step="0.01" class="form-control" id="montant{{ depense.id }}" name="montant" value="{{ depense.montant }}" required>
+                                                    <span class="input-group-text">$</span>
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label for="categorie{{ depense.id }}" class="form-label fw-semibold">Catégorie</label>
+                                                <input type="text" class="form-control" id="categorie{{ depense.id }}" name="categorie" value="{{ depense.categorie }}">
+                                            </div>
+                                            <button type="submit" class="btn btn-warning w-100">
+                                                <i class="fas fa-save me-2"></i> Enregistrer
+                                            </button>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <!-- Total des dépenses -->
-            <div class="text-center mt-4 p-3 bg-light rounded shadow-sm">
-                <h3 class="text-success mb-0">
-                    <i class="fas fa-coins me-2"></i>
-                    <strong>Total des dépenses : <span id="totalDepenses">0.00</span></strong>
-                </h3>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <!-- État vide -->
+            <div class="text-center py-5">
+                <div class="mb-4">
+                    <i class="fas fa-money-bill-wave fa-4x text-muted"></i>
+                </div>
+                <h4 class="text-muted mb-3">Aucune dépense enregistrée</h4>
+                <p class="text-muted mb-4">Commencez par ajouter une dépense en utilisant le formulaire ci-dessus.</p>
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Pied de page avec résumé -->
+        <div class="card-footer bg-light py-2">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+                <div>
+                    <small class="text-muted">
+                        <i class="fas fa-info-circle me-1"></i>
+                        <span id="visible-count">{{ depenses|length }}</span> dépense(s) affichée(s) sur {{ depenses|length }}
+                    </small>
+                </div>
+                <div class="mt-2 mt-md-0">
+                    <small class="text-muted fw-bold">
+                        <i class="fas fa-coins me-1"></i>
+                        Total filtré : <span id="totalDepenses" class="text-danger">0.00</span> $
+                    </small>
+                </div>
+                <div class="mt-2 mt-md-0">
+                    <small class="text-muted">
+                        <i class="fas fa-sync-alt me-1"></i>
+                        Actualisé : <span id="currentTime"></span>
+                    </small>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Script pour le filtrage, le total des dépenses, l'export en CSV et l'impression -->
+<!-- Script pour la gestion de la page -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const filterDateStart = document.getElementById('filterDateStart');
-        const filterDateEnd = document.getElementById('filterDateEnd');
-        const filterCategorie = document.getElementById('filterCategorie');
-        const filterDescription = document.getElementById('filterDescription');
-        const depensesTableBody = document.getElementById('depensesTableBody');
-        const rows = Array.from(depensesTableBody.getElementsByTagName('tr'));
-        const totalDepenses = document.getElementById('totalDepenses');
-        const exportCSVButton = document.getElementById('exportCSV');
-        const printButton = document.getElementById('printButton');
+document.addEventListener('DOMContentLoaded', function() {
+    // Mettre à jour l'heure actuelle
+    function updateCurrentTime() {
+        const now = new Date();
+        const timeString = now.getHours().toString().padStart(2, '0') + ':' + 
+                           now.getMinutes().toString().padStart(2, '0');
+        const currentTimeElement = document.getElementById('currentTime');
+        if (currentTimeElement) {
+            currentTimeElement.textContent = timeString;
+        }
+    }
 
-        // Fonction pour obtenir la date du jour au format YYYY-MM-DD
-        function getTodayDate() {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+    // Initialiser l'heure
+    updateCurrentTime();
+    setInterval(updateCurrentTime, 60000); // Mettre à jour toutes les minutes
+
+    // Éléments DOM pour les filtres
+    const filterDateStart = document.getElementById('filterDateStart');
+    const filterDateEnd = document.getElementById('filterDateEnd');
+    const filterCategorie = document.getElementById('filterCategorie');
+    const filterDescription = document.getElementById('filterDescription');
+    const filterMontantMin = document.getElementById('filterMontantMin');
+    const filterMontantMax = document.getElementById('filterMontantMax');
+    const searchGlobal = document.getElementById('searchGlobal');
+    const depensesTableBody = document.getElementById('depensesTableBody');
+    const rows = Array.from(depensesTableBody.querySelectorAll('tr.depense-row'));
+    const totalDepenses = document.getElementById('totalDepenses');
+    const visibleCount = document.getElementById('visible-count');
+    const exportCSVButton = document.getElementById('exportCSV');
+    const printButton = document.getElementById('printButton');
+    const resetFilters = document.getElementById('resetFilters');
+    const clearFilters = document.getElementById('clearFilters');
+    const btnToday = document.getElementById('btnToday');
+    const btnWeek = document.getElementById('btnWeek');
+    const btnMonth = document.getElementById('btnMonth');
+    const activeFiltersContainer = document.getElementById('activeFiltersContainer');
+    const activeFilters = document.getElementById('activeFilters');
+
+    // Éléments pour les statistiques
+    const depensesAujourdhui = document.getElementById('depensesAujourdhui');
+    const totalAjd = document.getElementById('totalAjd');
+    const depensesSemaine = document.getElementById('depensesSemaine');
+    const totalSemaine = document.getElementById('totalSemaine');
+    const depensesMois = document.getElementById('depensesMois');
+    const totalMois = document.getElementById('totalMois');
+    const totalHistorique = document.getElementById('totalHistorique');
+
+    // Variables pour le suivi des filtres
+    let activeFiltersList = [];
+
+    // Fonction pour formater la date
+    function formatDate(date) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // Fonction pour obtenir la date d'aujourd'hui
+    function getTodayDate() {
+        return formatDate(new Date());
+    }
+
+    // Fonction pour obtenir les dates de la semaine
+    function getWeekDates() {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        
+        return {
+            start: formatDate(startOfWeek),
+            end: formatDate(endOfWeek)
+        };
+    }
+
+    // Fonction pour obtenir les dates du mois
+    function getMonthDates() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        return {
+            start: formatDate(startOfMonth),
+            end: formatDate(endOfMonth)
+        };
+    }
+
+    // Fonction pour mettre à jour les filtres actifs
+    function updateActiveFilters() {
+        activeFiltersList = [];
+        activeFilters.innerHTML = '';
+        
+        if (filterDateStart.value) {
+            activeFiltersList.push({type: 'date', value: filterDateStart.value, label: 'Début: ' + filterDateStart.value});
+        }
+        if (filterDateEnd.value) {
+            activeFiltersList.push({type: 'date', value: filterDateEnd.value, label: 'Fin: ' + filterDateEnd.value});
+        }
+        if (filterCategorie.value) {
+            activeFiltersList.push({type: 'categorie', value: filterCategorie.value, label: 'Catégorie: ' + filterCategorie.value});
+        }
+        if (filterDescription.value) {
+            activeFiltersList.push({type: 'description', value: filterDescription.value, label: 'Description: ' + filterDescription.value});
+        }
+        if (filterMontantMin.value) {
+            activeFiltersList.push({type: 'montantMin', value: filterMontantMin.value, label: 'Montant min: ' + filterMontantMin.value + ' $'});
+        }
+        if (filterMontantMax.value) {
+            activeFiltersList.push({type: 'montantMax', value: filterMontantMax.value, label: 'Montant max: ' + filterMontantMax.value + ' $'});
+        }
+        if (searchGlobal.value) {
+            activeFiltersList.push({type: 'search', value: searchGlobal.value, label: 'Recherche: ' + searchGlobal.value});
         }
 
-        // Fonction pour filtrer les dépenses
-        function filterDepenses() {
-            const startDate = filterDateStart.value || getTodayDate(); // Par défaut, la date du jour
-            const endDate = filterDateEnd.value || getTodayDate(); // Par défaut, la date du jour
-            const categorie = filterCategorie.value.toLowerCase();
-            const description = filterDescription.value.toLowerCase();
+        // Afficher les filtres actifs
+        activeFiltersList.forEach(filter => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary';
+            badge.innerHTML = filter.label + ' <i class="fas fa-times ms-1" style="cursor:pointer;" data-type="' + filter.type + '"></i>';
+            activeFilters.appendChild(badge);
+        });
 
-            let total = 0;
+        // Afficher/masquer le conteneur
+        if (activeFiltersList.length > 0) {
+            activeFiltersContainer.style.display = 'block';
+        } else {
+            activeFiltersContainer.style.display = 'none';
+        }
+    }
 
-            rows.forEach(row => {
-                const date = row.getAttribute('data-date');
-                const rowCategorie = row.getAttribute('data-categorie').toLowerCase();
-                const rowDescription = row.getAttribute('data-description').toLowerCase();
+    // Fonction pour extraire le texte d'une cellule
+    function getCellText(cell) {
+        return cell.textContent.trim().toLowerCase();
+    }
 
-                const matchesDate = date >= startDate && date <= endDate;
-                const matchesCategorie = !categorie || rowCategorie.includes(categorie);
-                const matchesDescription = !description || rowDescription.includes(description);
-
-                if (matchesDate && matchesCategorie && matchesDescription) {
-                    row.style.display = '';
-                    total += parseFloat(row.cells[1].textContent); // Ajouter au total
-                } else {
-                    row.style.display = 'none';
+    // Fonction principale de filtrage
+    function filterDepenses() {
+        const startDate = filterDateStart.value || '';
+        const endDate = filterDateEnd.value || '';
+        const categorie = filterCategorie.value.toLowerCase().trim();
+        const description = filterDescription.value.toLowerCase().trim();
+        const montantMin = parseFloat(filterMontantMin.value) || 0;
+        const montantMax = parseFloat(filterMontantMax.value) || Infinity;
+        const search = searchGlobal.value.toLowerCase().trim();
+        
+        let totalMontant = 0;
+        let visible = 0;
+        
+        rows.forEach(row => {
+            const date = row.getAttribute('data-date') || '';
+            const rowCategorie = row.getAttribute('data-categorie') || '';
+            const rowDescription = row.getAttribute('data-description') || '';
+            const rowMontant = parseFloat(row.getAttribute('data-montant') || 0);
+            
+            // Vérifier tous les critères
+            const matchesDate = (!startDate || date >= startDate) && (!endDate || date <= endDate);
+            const matchesCategorie = !categorie || rowCategorie.includes(categorie);
+            const matchesDescription = !description || rowDescription.includes(description);
+            const matchesMontant = rowMontant >= montantMin && rowMontant <= montantMax;
+            
+            // Recherche globale
+            let matchesSearch = false;
+            if (!search) {
+                matchesSearch = true;
+            } else {
+                const cells = row.cells;
+                for (let i = 0; i < cells.length - 1; i++) {
+                    const cellText = getCellText(cells[i]);
+                    if (cellText.includes(search)) {
+                        matchesSearch = true;
+                        break;
+                    }
                 }
-            });
+                
+                if (!matchesSearch && (
+                    rowDescription.includes(search) || 
+                    rowCategorie.includes(search)
+                )) {
+                    matchesSearch = true;
+                }
+            }
+            
+            const isVisible = matchesDate && matchesCategorie && matchesDescription && 
+                            matchesMontant && matchesSearch;
+            
+            if (isVisible) {
+                row.style.display = '';
+                totalMontant += rowMontant;
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Mettre à jour les totaux
+        totalDepenses.textContent = totalMontant.toFixed(2);
+        visibleCount.textContent = visible;
+        
+        // Mettre à jour les filtres actifs
+        updateActiveFilters();
+    }
 
-            totalDepenses.textContent = total.toFixed(2); // Afficher le total
+    // Fonctions pour les boutons de période
+    function setToday() {
+        const today = getTodayDate();
+        filterDateStart.value = today;
+        filterDateEnd.value = today;
+        filterCategorie.value = '';
+        filterDescription.value = '';
+        filterMontantMin.value = '';
+        filterMontantMax.value = '';
+        searchGlobal.value = '';
+        filterDepenses();
+    }
+
+    function setWeek() {
+        const week = getWeekDates();
+        filterDateStart.value = week.start;
+        filterDateEnd.value = week.end;
+        filterCategorie.value = '';
+        filterDescription.value = '';
+        filterMontantMin.value = '';
+        filterMontantMax.value = '';
+        searchGlobal.value = '';
+        filterDepenses();
+    }
+
+    function setMonth() {
+        const month = getMonthDates();
+        filterDateStart.value = month.start;
+        filterDateEnd.value = month.end;
+        filterCategorie.value = '';
+        filterDescription.value = '';
+        filterMontantMin.value = '';
+        filterMontantMax.value = '';
+        searchGlobal.value = '';
+        filterDepenses();
+    }
+
+    // Fonction pour réinitialiser tous les filtres
+    function resetAllFilters() {
+        filterDateStart.value = '';
+        filterDateEnd.value = '';
+        filterCategorie.value = '';
+        filterDescription.value = '';
+        filterMontantMin.value = '';
+        filterMontantMax.value = '';
+        searchGlobal.value = '';
+        filterDepenses();
+    }
+
+    // Fonction pour exporter en CSV
+    function exportToCSV() {
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+        
+        if (visibleRows.length === 0) {
+            alert('Aucune dépense à exporter');
+            return;
         }
+        
+        const headers = ["Description", "Montant ($)", "Catégorie", "Date", "Heure"];
+        let csvContent = headers.join(";") + "\n";
+        
+        visibleRows.forEach(row => {
+            const cells = row.cells;
+            
+            // Extraire les données
+            const description = cells[0].textContent.trim();
+            const montant = cells[1].textContent.trim().replace('$', '').trim();
+            const categorie = cells[2]?.textContent?.trim() || '';
+            
+            // Date et heure
+            const dateElements = cells[3].querySelectorAll('small');
+            const date = dateElements[0]?.textContent?.trim() || '';
+            const heure = dateElements[1]?.textContent?.trim() || '';
+            
+            csvContent += `"${description}";${montant};"${categorie}";"${date}";"${heure}"\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `depenses_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
-        // Fonction pour exporter les données en CSV
-        function exportToCSV() {
-            const visibleRows = rows.filter(row => row.style.display !== 'none');
-            const headers = ["Description", "Montant", "Catégorie", "Date"];
-            const csvContent = [
-                headers.join(","), // En-têtes
-                ...visibleRows.map(row => {
-                    const cells = Array.from(row.cells).slice(0, 4); // Exclure la colonne Actions
-                    return cells.map(cell => cell.textContent).join(",");
-                })
-            ].join("\n");
-
-            // Créer un fichier CSV et le télécharger
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "depenses_ordinaires.csv";
-            link.click();
+    // Fonction pour imprimer
+    function printTable() {
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+        
+        if (visibleRows.length === 0) {
+            alert('Aucune dépense à imprimer');
+            return;
         }
-
-        // Fonction pour imprimer le tableau
-        function printTable() {
-            const printContents = `
+        
+        const today = new Date().toLocaleDateString();
+        const time = new Date().toLocaleTimeString();
+        const startDate = filterDateStart.value || 'Toutes dates';
+        const endDate = filterDateEnd.value || 'Toutes dates';
+        const totalFiltered = totalDepenses.textContent;
+        
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Liste des Dépenses - MKM Shop</title>
                 <style>
-                    body { font-family: Arial, sans-serif; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                    th { background-color: #2c3e50; color: white; }
-                    .total { font-size: 1.2rem; font-weight: bold; text-align: center; margin-top: 20px; }
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                    .header h1 { color: #2c3e50; margin-bottom: 5px; font-size: 24px; }
+                    .header h3 { color: #555; margin-bottom: 10px; font-size: 18px; }
+                    .header p { color: #777; font-size: 14px; margin: 5px 0; }
+                    .summary { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #ddd; }
+                    .summary h4 { margin: 0; color: #dc3545; font-size: 16px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                    th { background-color: #2c3e50; color: white; padding: 10px; text-align: left; border: 1px solid #ddd; }
+                    td { border: 1px solid #ddd; padding: 8px; }
+                    .total-row { font-weight: bold; background-color: #f8f9fa; color: #dc3545; }
+                    .footer { margin-top: 30px; text-align: center; color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 20px; }
+                    @media print {
+                        body { margin: 0; }
+                        @page { margin: 20mm; }
+                        .no-print { display: none; }
+                    }
                 </style>
-                <h2 style="text-align: center;">Historique des Dépenses Ordinaires</h2>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>MKM SHOP</h1>
+                    <h3>LISTE DES DÉPENSES ORDINAIRES</h3>
+                    <p>Période : ${startDate} - ${endDate}</p>
+                    <p>Généré le ${today} à ${time}</p>
+                </div>
+                
+                <div class="summary">
+                    <h4>RÉSUMÉ : ${visibleRows.length} dépense(s) - Total : ${totalFiltered} $</h4>
+                </div>
+                
                 <table>
                     <thead>
                         <tr>
                             <th>Description</th>
-                            <th>Montant</th>
+                            <th>Montant ($)</th>
                             <th>Catégorie</th>
                             <th>Date</th>
+                            <th>Heure</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${Array.from(rows)
-                            .filter(row => row.style.display !== 'none')
-                            .map(row => `
-                                <tr>
-                                    <td>${row.cells[0].textContent}</td>
-                                    <td>${row.cells[1].textContent}</td>
-                                    <td>${row.cells[2].textContent}</td>
-                                    <td>${row.cells[3].textContent}</td>
-                                </tr>
-                            `).join('')}
-                    </tbody>
-                </table>
-                <div class="total">
-                    <strong>Total des dépenses : ${totalDepenses.textContent}</strong>
-                </div>
+        `;
+        
+        visibleRows.forEach(row => {
+            const cells = row.cells;
+            
+            const description = cells[0].textContent;
+            const montant = cells[1].textContent;
+            const categorie = cells[2]?.textContent || '-';
+            
+            // Date et heure
+            const dateElements = cells[3].querySelectorAll('small');
+            const date = dateElements[0]?.textContent?.trim() || '';
+            const heure = dateElements[1]?.textContent?.trim() || '';
+            
+            html += `
+                <tr>
+                    <td>${description}</td>
+                    <td>${montant}</td>
+                    <td>${categorie}</td>
+                    <td>${date}</td>
+                    <td>${heure}</td>
+                </tr>
             `;
-
-            const printWindow = window.open('', '', 'height=600,width=800');
-            printWindow.document.write(printContents);
-            printWindow.document.close();
-            printWindow.print();
-        }
-
-        // Appliquer les filtres lors de la modification des champs
-        filterDateStart.addEventListener('change', filterDepenses);
-        filterDateEnd.addEventListener('change', filterDepenses);
-        filterCategorie.addEventListener('input', filterDepenses);
-        filterDescription.addEventListener('input', filterDepenses);
-
-        // Réinitialiser les filtres
-        document.getElementById('resetFilters').addEventListener('click', function() {
-            filterDateStart.value = '';
-            filterDateEnd.value = '';
-            filterCategorie.value = '';
-            filterDescription.value = '';
-            filterDepenses();
         });
+        
+        html += `
+                    </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="4" style="text-align: right;"><strong>TOTAL :</strong></td>
+                            <td colspan="1"><strong>${totalFiltered} $</strong></td>
+                        </tr>
+                    </tfoot>
+                </table>
+                
+                <div class="footer">
+                    <p>MKM Shop - Gestion Commerciale</p>
+                    <p>Document généré automatiquement</p>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(() => window.close(), 1000);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+    }
 
-        // Exporter en CSV
-        exportCSVButton.addEventListener('click', exportToCSV);
+    // Fonction debounce pour optimiser les performances
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
 
-        // Imprimer le tableau
-        printButton.addEventListener('click', printTable);
-
-        // Appliquer le filtre par défaut (dépenses du jour) au chargement de la page
-        filterDepenses();
+    // Écouteurs d'événements
+    const debouncedFilter = debounce(filterDepenses, 300);
+    
+    // Écouteurs pour tous les filtres
+    [filterDateStart, filterDateEnd, filterCategorie, filterDescription, 
+     filterMontantMin, filterMontantMax, searchGlobal].forEach(element => {
+        if (element) {
+            element.addEventListener('input', debouncedFilter);
+            if (element.type === 'date' || element.tagName === 'SELECT') {
+                element.addEventListener('change', debouncedFilter);
+            }
+        }
     });
+
+    // Écouteurs pour les boutons
+    if (resetFilters) resetFilters.addEventListener('click', resetAllFilters);
+    if (clearFilters) clearFilters.addEventListener('click', resetAllFilters);
+    if (btnToday) btnToday.addEventListener('click', setToday);
+    if (btnWeek) btnWeek.addEventListener('click', setWeek);
+    if (btnMonth) btnMonth.addEventListener('click', setMonth);
+    if (exportCSVButton) exportCSVButton.addEventListener('click', exportToCSV);
+    if (printButton) printButton.addEventListener('click', printTable);
+
+    // Écouteur pour supprimer les filtres individuels
+    if (activeFilters) {
+        activeFilters.addEventListener('click', function(e) {
+            if (e.target.classList.contains('fa-times')) {
+                const filterType = e.target.getAttribute('data-type');
+                switch(filterType) {
+                    case 'date':
+                        filterDateStart.value = '';
+                        filterDateEnd.value = '';
+                        break;
+                    case 'categorie':
+                        filterCategorie.value = '';
+                        break;
+                    case 'description':
+                        filterDescription.value = '';
+                        break;
+                    case 'montantMin':
+                        filterMontantMin.value = '';
+                        break;
+                    case 'montantMax':
+                        filterMontantMax.value = '';
+                        break;
+                    case 'search':
+                        searchGlobal.value = '';
+                        break;
+                }
+                filterDepenses();
+            }
+        });
+    }
+
+    // Gestion de la suppression des dépenses
+    const deleteButtons = document.querySelectorAll('.btn-supprimer');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            const depenseId = this.getAttribute('data-id');
+            const description = this.getAttribute('data-description');
+            
+            if (confirm(`Êtes-vous sûr de vouloir supprimer la dépense "${description}" ?`)) {
+                fetch(`/depenses/supprimer/${depenseId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Erreur lors de la suppression : ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erreur:', error);
+                    alert('Erreur lors de la suppression');
+                });
+            }
+        });
+    });
+
+    // Initialiser avec les dépenses d'aujourd'hui par défaut
+    setToday();
+});
 </script>
 
-<!-- Styles supplémentaires -->
+<!-- Styles supplémentaires pour la responsivité -->
 <style>
-    /* Style du tableau */
-    .table {
-        border-collapse: collapse;
-        width: 100%;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    .card {
+        border-radius: 10px;
+        margin-bottom: 20px;
     }
-
-    .table th, .table td {
-        padding: 12px;
-        text-align: center; /* Centrer le texte dans les cellules */
-        border-bottom: 2px solid #ddd;
+    
+    .card-header {
+        border-radius: 10px 10px 0 0 !important;
+        border-bottom: none;
     }
-
+    
     .table th {
-        background-color: #2c3e50;
-        color: white;
-        font-weight: bold;
+        border-top: none;
+        font-weight: 600;
+        font-size: 0.875rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 12px 8px;
+    }
+    
+    .depense-row:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+        transform: translateY(-1px);
+        transition: all 0.2s ease;
+    }
+    
+    .btn-group .btn {
+        border-radius: 6px;
+        margin: 0 2px;
+    }
+    
+    .badge {
+        font-size: 0.75rem;
+        padding: 0.35em 0.65em;
     }
 
-    .table tbody tr:hover {
-        background-color: #f5f5f5;
+    /* Style pour les filtres actifs */
+    #activeFilters .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    /* Boutons de période actifs */
+    .btn-primary.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
     }
 
-    /* Style du total des dépenses */
-    .bg-light {
-        background-color: #f8f9fa !important;
+    /* Responsive styles */
+    @media (max-width: 768px) {
+        .container-fluid {
+            padding: 10px;
+        }
+        
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .table th, .table td {
+            padding: 8px 4px;
+        }
+        
+        .btn-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .btn-group .btn {
+            margin: 2px 0;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+        
+        .d-flex.justify-content-between.align-items-center.mb-4 {
+            flex-direction: column;
+            align-items: flex-start !important;
+        }
+        
+        .d-flex.align-items-center {
+            margin-top: 10px;
+        }
+        
+        .modal-dialog {
+            margin: 10px;
+            max-width: 95%;
+        }
+        
+        /* Ajustement des cartes de statistiques */
+        .card-body.text-white h4 {
+            font-size: 1.2rem;
+        }
+        
+        .card-body.text-white i.fa-2x {
+            font-size: 1.5rem;
+        }
+        
+        /* Ajustement des boutons de filtre */
+        .d-flex.flex-wrap.gap-2 {
+            gap: 0.5rem !important;
+        }
+        
+        .btn {
+            font-size: 0.85rem;
+            padding: 0.375rem 0.75rem;
+        }
+        
+        /* Masquer certaines colonnes sur mobile */
+        .d-none.d-md-table-cell {
+            display: none !important;
+        }
+        
+        /* Ajustement des inputs dans les formulaires */
+        .form-control, .form-select {
+            font-size: 0.9rem;
+            padding: 0.375rem 0.75rem;
+        }
+        
+        /* Ajustement des badges */
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.25em 0.5em;
+        }
     }
 
-    .text-success {
-        font-size: 1.5rem;
-        font-weight: bold;
+    @media (max-width: 576px) {
+        .container-fluid {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .card-body {
+            padding: 1rem;
+        }
+        
+        .row.g-3 {
+            margin-left: -5px;
+            margin-right: -5px;
+        }
+        
+        .row.g-3 > [class*="col-"] {
+            padding-left: 5px;
+            padding-right: 5px;
+        }
+        
+        /* Ajustement pour les très petits écrans */
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .table {
+            min-width: 500px;
+        }
+        
+        /* Ajustement des modales */
+        .modal-content {
+            margin: 10px;
+        }
+        
+        /* Texte plus petit sur mobile */
+        .h4 {
+            font-size: 1.25rem;
+        }
+        
+        .small {
+            font-size: 0.8rem;
+        }
+        
+        /* Boutons en bloc sur mobile */
+        .d-flex.flex-wrap.gap-2 {
+            flex-direction: column;
+        }
+        
+        .d-flex.flex-wrap.gap-2 > * {
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
     }
 
-    /* Style des boutons */
-    .btn-primary {
-        background-color: #007bff;
-        border-color: #007bff;
-    }
-
-    .btn-primary:hover {
-        background-color: #0056b3;
-        border-color: #004085;
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-
-    .btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-    }
-
-    .btn-success {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
-
-    .btn-success:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
+    @media (max-width: 400px) {
+        /* Ajustements pour les très petits smartphones */
+        .card-header {
+            padding: 0.75rem;
+        }
+        
+        .card-header h5 {
+            font-size: 1rem;
+        }
+        
+        .table {
+            min-width: 400px;
+        }
+        
+        /* Masquer les icônes dans les boutons sur très petits écrans */
+        .btn .fas {
+            margin-right: 0;
+        }
+        
+        .btn span {
+            display: none;
+        }
+        
+        .btn .d-none.d-sm-inline,
+        .btn .d-none.d-md-inline {
+            display: inline !important;
+        }
     }
 </style>
+
+<!-- Script pour les confirmations de suppression -->
+<script>
+// Fonction pour confirmer la suppression
+function confirmerSuppression(depenseId, description) {
+    if (confirm(`Êtes-vous sûr de vouloir supprimer la dépense "${description}" ?`)) {
+        window.location.href = `/depenses/supprimer/${depenseId}`;
+    }
+    return false;
+}
+</script>
 {% endblock %}

@@ -4,23 +4,33 @@
 
 {% block content %}
 <div class="container-fluid px-3 py-4">
-    <!-- En-tête amélioré -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h1 class="h4 mb-1 text-dark fw-bold">
-                <i class="fas fa-cash-register text-primary me-2"></i>Point de Vente
-            </h1>
-            <p class="text-muted small mb-0">Système de gestion des ventes</p>
-        </div>
-        <div class="d-flex align-items-center">
-            <span class="badge bg-success fs-6 me-3">
-                <i class="fas fa-shopping-cart me-1"></i>
-                <span id="panier-count">{{ panier|length if panier else 0 }}</span> article(s)
-            </span>
-            <span class="badge bg-primary fs-6">
-                <i class="fas fa-dollar-sign me-1"></i>
-                <span id="panier-total">{{ "%.2f"|format(total) if panier else "0.00" }}</span> $
-            </span>
+    <!-- En-tête premium avec gradient -->
+    <div class="mb-5">
+        <div class="bg-gradient-primary rounded-4 p-4 text-white shadow-lg" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h1 class="h3 mb-2 fw-bold d-flex align-items-center">
+                        <i class="fas fa-cash-register me-3 fs-2"></i>Point de Vente
+                    </h1>
+                    <p class="mb-0 opacity-85">Système de gestion intégré des ventes et des paiements</p>
+                </div>
+                <div class="d-flex gap-3 flex-wrap">
+                    <div class="bg-white bg-opacity-20 rounded-3 px-4 py-3 backdrop-blur-sm">
+                        <div class="small text-white-50 mb-1">Articles en panier</div>
+                        <div class="h4 mb-0 fw-bold">
+                            <i class="fas fa-shopping-cart me-2"></i>
+                            <span id="panier-count">{{ panier|length if panier else 0 }}</span>
+                        </div>
+                    </div>
+                    <div class="bg-white bg-opacity-20 rounded-3 px-4 py-3 backdrop-blur-sm">
+                        <div class="small text-white-50 mb-1">Montant total</div>
+                        <div class="h4 mb-0 fw-bold">
+                            <i class="fas fa-money-bill-wave me-2"></i>
+                            <span id="panier-total">{{ "%.2f"|format(total) if panier else "0.00" }}</span>$
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -50,35 +60,35 @@
     <!-- Interface principale responsive -->
     <div class="row g-4">
         <!-- Section Ajout de produits -->
-        <div class="col-xl-6 col-lg-12">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-primary text-white py-3">
+        <div class="col-12 col-sm-6">
+            <div class="card shadow-md border-0 h-100 rounded-4 overflow-hidden transition-all" style="border-left: 5px solid #667eea;">
+                <div class="card-header bg-gradient-success text-white py-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                     <h5 class="card-title mb-0 d-flex align-items-center">
-                        <i class="fas fa-plus-circle me-2"></i> Ajouter un produit au panier
+                        <i class="fas fa-plus-circle me-3 fs-5"></i> Ajouter un produit au panier
                     </h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <form id="ajouterProduitForm" action="{{ url_for('routes.ventes') }}" method="POST">
                         <!-- Bouton pour ouvrir la modale -->
-                        <div class="mb-3">
-                            <button type="button" class="btn btn-primary w-100 d-flex align-items-center justify-content-center py-2" data-bs-toggle="modal" data-bs-target="#produitModal">
-                                <i class="fas fa-search me-2"></i> Sélectionner un produit
+                        <div class="mb-4">
+                            <button type="button" class="btn btn-primary w-100 d-flex align-items-center justify-content-center py-3 rounded-3 fw-bold" data-bs-toggle="modal" data-bs-target="#produitModal" style="font-size: 0.95rem;">
+                                <i class="fas fa-search me-2 fs-5"></i> Sélectionner un produit
                             </button>
                         </div>
 
-                        <!-- Carte produit sélectionné -->
-                        <div class="card border-primary mb-3" id="produit-selectionne-card" style="display: none;">
-                            <div class="card-header bg-light py-2">
-                                <h6 class="card-title mb-0 fw-bold">Produit sélectionné</h6>
+                        <!-- Carte produit sélectionné avec design amélioré -->
+                        <div class="card border-0 bg-light rounded-3 mb-4" id="produit-selectionne-card" style="display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+                            <div class="card-header bg-white border-0 py-3">
+                                <h6 class="card-title mb-0 fw-bold text-primary">✓ Produit sélectionné</h6>
                             </div>
-                            <div class="card-body py-2">
+                            <div class="card-body py-3">
                                 <div class="d-flex justify-content-between align-items-center">
                                     <div>
-                                        <h6 class="mb-0 fw-semibold" id="nom-produit-text">Nom du produit</h6>
+                                        <h6 class="mb-1 fw-bold" id="nom-produit-text">Nom du produit</h6>
                                         <small class="text-muted" id="stock-produit-text">Stock: 0</small>
                                     </div>
                                     <div class="text-end">
-                                        <span class="badge bg-success fs-6 fw-bold" id="prix-produit-text">0.00 $</span>
+                                        <span class="badge bg-success fs-6 fw-bold rounded-3" id="prix-produit-text">0.00 $</span>
                                     </div>
                                 </div>
                             </div>
@@ -86,38 +96,28 @@
 
                         <input type="hidden" id="produit_id" name="produit_id">
 
-                        <!-- Tableau pour les champs quantité et prix -->
-                        <div class="table-responsive mb-3">
-                            <table class="table table-bordered table-hover">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th class="text-center">Quantité</th>
-                                        <th class="text-center">Prix unitaire ($)</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td class="text-center">
-                                            <div class="input-group input-group-sm justify-content-center">
-                                                <button type="button" class="btn btn-outline-secondary" id="decrement-qte">
-                                                    <i class="fas fa-minus"></i>
-                                                </button>
-                                                <input type="number" class="form-control text-center mx-2" id="quantite" name="quantite" value="1" min="1" required style="width: 80px;">
-                                                <button type="button" class="btn btn-outline-secondary" id="increment-qte">
-                                                    <i class="fas fa-plus"></i>
-                                                </button>
-                                            </div>
-                                        </td>
-                                        <td class="text-center">
-                                            <input type="number" class="form-control form-control-sm text-center" id="prix" name="prix" step="0.01" min="0.01" required style="width: 120px;">
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                        <!-- Section Quantité et Prix avec meilleur design -->
+                        <div class="row g-3 mb-4">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">Quantité</label>
+                                <div class="input-group input-group-lg rounded-3" style="overflow: hidden;">
+                                    <button type="button" class="btn btn-outline-secondary rounded-0 border-0" id="decrement-qte">
+                                        <i class="fas fa-minus fs-6"></i>
+                                    </button>
+                                    <input type="number" class="form-control text-center border-0 fw-bold" id="quantite" name="quantite" value="1" min="1" required>
+                                    <button type="button" class="btn btn-outline-secondary rounded-0 border-0" id="increment-qte">
+                                        <i class="fas fa-plus fs-6"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">Prix unitaire ($)</label>
+                                <input type="number" class="form-control form-control-lg rounded-3 border-2 fw-bold" id="prix" name="prix" step="0.01" min="0.01" required placeholder="0.00">
+                            </div>
                         </div>
 
-                        <button type="submit" name="ajouter_au_panier" class="btn btn-success w-100 mt-3 py-2 d-flex align-items-center justify-content-center" id="btn-ajouter-panier" disabled>
-                            <i class="fas fa-cart-plus me-2"></i> Ajouter au panier
+                        <button type="submit" name="ajouter_au_panier" class="btn btn-success w-100 py-3 rounded-3 fw-bold d-flex align-items-center justify-content-center" id="btn-ajouter-panier" disabled>
+                            <i class="fas fa-cart-plus me-2 fs-5"></i> Ajouter au panier
                         </button>
                     </form>
                 </div>
@@ -125,46 +125,49 @@
         </div>
 
         <!-- Section Panier -->
-        <div class="col-xl-6 col-lg-12">
-            <div class="card shadow-sm border-0 h-100">
-                <div class="card-header bg-success text-white py-3">
+        <div class="col-12 col-sm-6">
+            <div class="card shadow-md border-0 h-100 rounded-4 overflow-hidden transition-all" style="border-left: 5px solid #f093fb;">
+                <div class="card-header bg-gradient-success text-white py-4" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
                     <h5 class="card-title mb-0 d-flex align-items-center">
-                        <i class="fas fa-shopping-basket me-2"></i> Panier
+                        <i class="fas fa-shopping-basket me-3 fs-5"></i> Panier
                     </h5>
                 </div>
-                <div class="card-body d-flex flex-column">
+                <div class="card-body p-4 d-flex flex-column h-100">
                     {% if panier %}
-                    <div class="table-responsive flex-grow-1">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-dark">
+                    <div class="table-responsive flex-grow-1 mb-4">
+                        <table class="table table-hover align-middle table-striped">
+                            <thead class="table-dark sticky-top">
                                 <tr>
-                                    <th>Produit</th>
-                                    <th class="text-center">Qté</th>
-                                    <th class="text-end">Prix U.</th>
-                                    <th class="text-end">Total</th>
-                                    <th class="text-center">Actions</th>
+                                    <th class="bg-dark"><i class="fas fa-box me-2"></i>Produit</th>
+                                    <th class="text-center bg-dark">Qté</th>
+                                    <th class="text-end bg-dark">P.U.</th>
+                                    <th class="text-end bg-dark">Total</th>
+                                    <th class="text-center bg-dark">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for item in panier %}
-                                <tr>
+                                <tr class="align-middle">
                                     <td>
                                         <div class="d-flex align-items-center">
                                             <div class="flex-shrink-0">
-                                                <i class="fas fa-box text-primary me-2"></i>
+                                                <div class="bg-primary bg-opacity-10 p-2 rounded">
+                                                    <i class="fas fa-box text-primary"></i>
+                                                </div>
                                             </div>
-                                            <div class="flex-grow-1 ms-2">
-                                                <span class="fw-semibold">{{ item.produit.nom }}</span>
+                                            <div class="flex-grow-1 ms-3">
+                                                <span class="fw-bold">{{ item.produit.nom }}</span><br/>
+                                                <small class="text-muted">{{ item.produit.sku }}</small>
                                             </div>
                                         </div>
                                     </td>
-                                    <td class="text-center">{{ item.quantite }}</td>
-                                    <td class="text-end">{{ "%.2f"|format(item.prix) }} $</td>
-                                    <td class="text-end fw-semibold">{{ "%.2f"|format(item.prix * item.quantite) }} $</td>
+                                    <td class="text-center"><span class="badge bg-secondary rounded-3">{{ item.quantite }}</span></td>
+                                    <td class="text-end"><strong>{{ "%.2f"|format(item.prix) }}</strong> $</td>
+                                    <td class="text-end"><strong class="text-success">{{ "%.2f"|format(item.prix * item.quantite) }}</strong> $</td>
                                     <td class="text-center">
                                         <form action="{{ url_for('routes.ventes') }}" method="POST" class="d-inline">
                                             <input type="hidden" name="panier_id" value="{{ item.id }}">
-                                            <button type="submit" name="supprimer_du_panier" class="btn btn-sm btn-outline-danger" title="Supprimer du panier">
+                                            <button type="submit" name="supprimer_du_panier" class="btn btn-sm btn-outline-danger rounded-circle" title="Supprimer">
                                                 <i class="fas fa-trash-alt"></i>
                                             </button>
                                         </form>
@@ -175,129 +178,113 @@
                         </table>
                     </div>
                     
-                    <div class="mt-auto pt-3 border-top">
-                        <!-- Tableau pour le total -->
-                        <div class="table-responsive mb-3">
-                            <table class="table table-bordered table-success">
-                                <tbody>
-                                    <tr>
-                                        <td class="fw-bold text-end" style="width: 50%;">Total:</td>
-                                        <td class="fw-bold text-success text-end" style="width: 50%;">{{ "%.2f"|format(total) }} $</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                    <!-- Résumé du panier -->
+                    <div class="bg-light rounded-3 p-4 mb-4 border-2 border-success">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <span class="fw-bold fs-5">Total du panier</span>
+                            <span class="fs-4 fw-bold text-success">{{ "%.2f"|format(total) }} $</span>
                         </div>
+                    </div>
 
                         <!-- Bouton pour vider le panier -->
-                        <form action="{{ url_for('routes.ventes') }}" method="POST" class="mb-3">
-                            <button type="submit" name="vider_panier" class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center py-2" id="btn-vider-panier">
+                        <form action="{{ url_for('routes.ventes') }}" method="POST" class="mb-4">
+                            <button type="submit" name="vider_panier" class="btn btn-outline-danger w-100 py-2 rounded-3 fw-bold d-flex align-items-center justify-content-center" id="btn-vider-panier">
                                 <i class="fas fa-trash me-2"></i> Vider le panier
                             </button>
                         </form>
 
-                        <!-- Section Finalisation de vente -->
-                        <div class="card border-primary">
-                            <div class="card-header bg-light py-2">
+                        <!-- Section Finalisation de vente améliorée -->
+                        <div class="card border-0 bg-gradient-light rounded-4 p-0 overflow-hidden" style="background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);">
+                            <div class="card-header bg-white border-0 py-3">
                                 <h5 class="card-title mb-0 d-flex align-items-center">
-                                    <i class="fas fa-credit-card me-2"></i> Finaliser la vente
+                                    <i class="fas fa-credit-card me-2 text-primary"></i> Finaliser la vente
                                 </h5>
                             </div>
-                            <div class="card-body">
+                            <div class="card-body p-4">
                                 <form action="{{ url_for('routes.ventes') }}" method="POST" id="finaliserForm">
-                                    <div class="mb-3">
-                                        <label for="nom_client" class="form-label fw-semibold">Nom du client</label>
-                                        <input type="text" class="form-control" id="nom_client" name="nom_client" required placeholder="Saisir le nom du client">
+                                    <!-- Nom du client -->
+                                    <div class="mb-4">
+                                        <label for="nom_client" class="form-label fw-bold small">📋 Nom du client *</label>
+                                        <input type="text" class="form-control form-control-lg rounded-3 border-2" id="nom_client" name="nom_client" required placeholder="Entrez le nom du client">
                                     </div>
                                     
-                                    <!-- Options de paiement avec tableau -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold">Mode de paiement</label>
-                                        <div class="table-responsive">
-                                            <table class="table table-bordered table-hover">
-                                                <tbody>
-                                                    <tr>
-                                                        <td class="text-center" style="width: 50%;">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="paiement_type" id="paiement_comptant" value="comptant" checked>
-                                                                <label class="form-check-label w-100" for="paiement_comptant">
-                                                                    <i class="fas fa-money-bill-wave d-block mb-1 text-success fs-4"></i>
-                                                                    <span class="fw-semibold">Comptant</span>
-                                                                </label>
-                                                            </div>
-                                                        </td>
-                                                        <td class="text-center" style="width: 50%;">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="paiement_type" id="paiement_credit" value="credit">
-                                                                <label class="form-check-label w-100" for="paiement_credit">
-                                                                    <i class="fas fa-credit-card d-block mb-1 text-primary fs-4"></i>
-                                                                    <span class="fw-semibold">Crédit</span>
-                                                                </label>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                                    <!-- Mode de paiement -->
+                                    <div class="mb-4">
+                                        <label class="form-label fw-bold small mb-3">💳 Mode de paiement</label>
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <div class="form-check card p-3 rounded-3 border-2 border-success cursor-pointer" style="cursor: pointer;">
+                                                    <input class="form-check-input" type="radio" name="paiement_type" id="paiement_comptant" value="comptant" checked>
+                                                    <label class="form-check-label w-100 mb-0" for="paiement_comptant">
+                                                        <i class="fas fa-money-bill-wave text-success me-2 fs-5"></i>
+                                                        <span class="fw-bold">Comptant</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="form-check card p-3 rounded-3 border-2 border-primary cursor-pointer" style="cursor: pointer;">
+                                                    <input class="form-check-input" type="radio" name="paiement_type" id="paiement_credit" value="credit">
+                                                    <label class="form-check-label w-100 mb-0" for="paiement_credit">
+                                                        <i class="fas fa-credit-card text-primary me-2 fs-5"></i>
+                                                        <span class="fw-bold">Crédit</span>
+                                                    </label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     
-                                    <!-- Champ pour le montant en cash avec tableau -->
-                                    <div class="table-responsive" id="montant_cash_group" style="display: none;">
-                                        <table class="table table-bordered table-warning">
-                                            <tbody>
-                                                <tr>
-                                                    <td class="fw-semibold" style="width: 40%;">Montant payé en cash ($)</td>
-                                                    <td style="width: 60%;">
-                                                        <input type="number" class="form-control" id="montant_cash" name="montant_cash" step="0.01" min="0" value="{{ "%.2f"|format(total) }}" placeholder="0.00">
-                                                        <div class="form-text small">Le reste sera comptabilisé comme crédit</div>
-                                                    </td>
-                                                </tr>
-                                            </tbody>
-                                        </table>
+                                    <!-- Montant en cash (visible si crédit sélectionné) -->
+                                    <div class="mb-4" id="montant_cash_group" style="display: none;">
+                                        <label for="montant_cash" class="form-label fw-bold small">💰 Montant payé en cash ($)</label>
+                                        <input type="number" class="form-control form-control-lg rounded-3 border-2" id="montant_cash" name="montant_cash" step="0.01" min="0" value="{{ "%.2f"|format(total) }}" placeholder="0.00">
+                                        <div class="form-text small mt-2"><i class="fas fa-info-circle me-1"></i>Le reste sera comptabilisé comme crédit</div>
                                     </div>
 
-                                    <!-- NOUVEAU: Options de livraison -->
-                                    <div class="mb-3">
-                                        <label class="form-label fw-semibold">Options de livraison</label>
-                                        <div class="table-responsive">
-                                            <table class="table table-bordered table-hover">
-                                                <tbody>
-                                                    <tr>
-                                                        <td class="text-center" style="width: 50%;">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="type_livraison" id="livraison_sur_place" value="sur_place" checked>
-                                                                <label class="form-check-label w-100" for="livraison_sur_place">
-                                                                    <i class="fas fa-store d-block mb-1 text-success fs-4"></i>
-                                                                    <span class="fw-semibold">Sur place</span>
-                                                                    <small class="d-block text-muted">Client emporte maintenant</small>
-                                                                </label>
-                                                            </div>
-                                                        </td>
-                                                        <td class="text-center" style="width: 50%;">
-                                                            <div class="form-check">
-                                                                <input class="form-check-input" type="radio" name="type_livraison" id="livraison_depot" value="depot">
-                                                                <label class="form-check-label w-100" for="livraison_depot">
-                                                                    <i class="fas fa-warehouse d-block mb-1 text-primary fs-4"></i>
-                                                                    <span class="fw-semibold">Au dépôt</span>
-                                                                    <small class="d-block text-muted">Livraison au dépôt</small>
-                                                                </label>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                                    <!-- Options de livraison -->
+                                    <div class="mb-4">
+                                        <label class="form-label fw-bold small mb-3">🚚 Options de livraison</label>
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <div class="form-check card p-3 rounded-3 border-2 border-success cursor-pointer" style="cursor: pointer;">
+                                                    <input class="form-check-input" type="radio" name="type_livraison" id="livraison_sur_place" value="sur_place" checked>
+                                                    <label class="form-check-label w-100 mb-0" for="livraison_sur_place">
+                                                        <i class="fas fa-store text-success me-2 fs-5"></i>
+                                                        <span class="fw-bold">Sur place</span><br/>
+                                                        <small class="text-muted">Client emporte maintenant</small>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="form-check card p-3 rounded-3 border-2 border-primary cursor-pointer" style="cursor: pointer;">
+                                                    <input class="form-check-input" type="radio" name="type_livraison" id="livraison_depot" value="depot">
+                                                    <label class="form-check-label w-100 mb-0" for="livraison_depot">
+                                                        <i class="fas fa-warehouse text-primary me-2 fs-5"></i>
+                                                        <span class="fw-bold">Au dépôt</span><br/>
+                                                        <small class="text-muted">Livraison ultérieure</small>
+                                                    </label>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <!-- NOUVEAU: Lieu de retrait (visible seulement pour livraison dépôt) -->
-                                    <div class="mb-3" id="lieu_retrait_group" style="display: none;">
-                                        <label class="form-label fw-semibold">Lieu de retrait au dépôt</label>
-                                        <select class="form-select" name="lieu_retrait" id="lieu_retrait">
-                                            <option value="depot_principal">Dépôt principal</option>
-                                            <option value="depot_secondaire">Dépôt secondaire</option>
-                                            <option value="entrepot">Entrepôt central</option>
+                                    <!-- Lieu de retrait -->
+                                    <div class="mb-4" id="lieu_retrait_group" style="display: none;">
+                                        <label for="lieu_retrait" class="form-label fw-bold small">📍 Lieu de retrait</label>
+                                        <select class="form-select form-select-lg rounded-3 border-2" name="lieu_retrait" id="lieu_retrait">
+                                            <option value="depot_principal">🏪 Dépôt principal</option>
+                                            <option value="depot_secondaire">🏪 Dépôt secondaire</option>
+                                            <option value="entrepot">📦 Entrepôt central</option>
                                         </select>
-                                        <div class="form-text">
-                                            Le client retirera sa commande à cet emplacement
+                                        <div class="form-text small mt-2"><i class="fas fa-info-circle me-1"></i>Le client retirera sa commande à cet emplacement</div>
+                                    </div>
+                                    
+                                    <button type="submit" name="finaliser_vente" class="btn btn-primary btn-lg w-100 py-3 rounded-3 fw-bold d-flex align-items-center justify-content-center">
+                                        <i class="fas fa-check-circle me-2 fs-5"></i> Finaliser la vente
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    
                                         </div>
                                     </div>
                                     
@@ -310,11 +297,11 @@
                     </div>
                     {% else %}
                     <div class="d-flex flex-column align-items-center justify-content-center text-center py-5">
-                        <i class="fas fa-shopping-basket fa-3x text-muted mb-3"></i>
-                        <h5 class="text-muted">Votre panier est vide</h5>
+                        <i class="fas fa-shopping-basket fa-4x text-muted mb-4 opacity-25"></i>
+                        <h5 class="text-muted fw-bold">Panier vide</h5>
                         <p class="text-muted mb-4">Ajoutez des produits pour commencer une vente</p>
-                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#produitModal">
-                            <i class="fas fa-plus me-1"></i> Ajouter un produit
+                        <button type="button" class="btn btn-primary btn-lg rounded-3" data-bs-toggle="modal" data-bs-target="#produitModal">
+                            <i class="fas fa-plus me-2"></i> Ajouter un produit
                         </button>
                     </div>
                     {% endif %}
@@ -327,19 +314,19 @@
     {% if facture is not none %}
     <div class="row mt-5">
         <div class="col-12">
-            <div class="card shadow-sm border-0">
-                <div class="card-header bg-gradient-primary text-white py-3">
+            <div class="card shadow-md border-0 rounded-4 overflow-hidden">
+                <div class="card-header text-white py-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
                     <h5 class="card-title mb-0 d-flex align-items-center justify-content-between">
-                        <span><i class="fas fa-receipt me-2"></i> Facture générée</span>
+                        <span><i class="fas fa-receipt me-3 fs-5"></i> Facture générée</span>
                         <div>
-                            <span class="badge bg-light text-primary fs-6 me-2">N° {{ facture.id }}</span>
-                            <button type="button" onclick="imprimerFacture()" class="btn btn-light btn-sm">
-                                <i class="fas fa-print me-1"></i> Imprimer
+                            <span class="badge bg-white text-primary fs-6 me-3 px-3 py-2">N° {{ facture.id }}</span>
+                            <button type="button" onclick="imprimerFacture()" class="btn btn-light btn-sm rounded-3 py-2 px-3">
+                                <i class="fas fa-print me-2"></i> Imprimer
                             </button>
                         </div>
                     </h5>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-4">
                     <!-- Aperçu de la facture à l'écran -->
                     <div class="thermal-receipt mx-auto" id="facture">
                         <!-- En-tête du ticket -->
@@ -481,20 +468,32 @@
                     </div>
 
                     <!-- Boutons d'action -->
-                    <div class="no-print text-center mt-4">
-                        <button type="button" onclick="imprimerFacture()" class="btn btn-primary btn-lg me-2">
-                            <i class="fas fa-print me-2"></i> Imprimer le ticket
-                        </button>
-                        <button type="button" onclick="fermerFacture()" class="btn btn-outline-secondary btn-lg">
-                            <i class="fas fa-times me-2"></i> Fermer
-                        </button>
-                        
-                        <!-- NOUVEAU: Bouton pour suivre la livraison -->
-                        {% if facture.type_livraison == 'depot' and livraison_info %}
-                        <a href="{{ url_for('routes.details_livraison', id=livraison_info.id) }}" class="btn btn-info btn-lg ms-2">
-                            <i class="fas fa-truck me-2"></i> Suivre la livraison
-                        </a>
-                        {% endif %}
+                    <div class="no-print text-center mt-5 pt-4 border-top">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <button type="button" onclick="imprimerFacture()" class="btn btn-primary btn-lg w-100 rounded-3 fw-bold py-3">
+                                    <i class="fas fa-print me-2"></i> Imprimer
+                                </button>
+                            </div>
+                            {% if facture.type_livraison == 'depot' and livraison_info %}
+                            <div class="col-md-4">
+                                <a href="{{ url_for('routes.details_livraison', id=livraison_info.id) }}" class="btn btn-info btn-lg w-100 rounded-3 fw-bold py-3">
+                                    <i class="fas fa-truck me-2"></i> Suivre la livraison
+                                </a>
+                            </div>
+                            <div class="col-md-4">
+                                <button type="button" onclick="fermerFacture()" class="btn btn-outline-secondary btn-lg w-100 rounded-3 fw-bold py-3">
+                                    <i class="fas fa-check me-2"></i> Terminer
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="col-md-8">
+                                <button type="button" onclick="fermerFacture()" class="btn btn-success btn-lg w-100 rounded-3 fw-bold py-3">
+                                    <i class="fas fa-check me-2"></i> Nouvelle vente
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1026,6 +1025,9 @@
 <!-- Script pour la gestion de la page -->
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Déclaration de la variable total une seule fois
+        const totalValue = {{ total|tojson }};
+        
         // Éléments DOM
         const searchProduitModal = document.getElementById('searchProduitModal');
         const produitListModal = document.getElementById('produitListModal');
@@ -1109,14 +1111,14 @@
         paiementComptant.addEventListener('change', function() {
             if (this.checked) {
                 montantCashGroup.style.display = 'none';
-                montantCashInput.value = {{ total|tojson }};
+                montantCashInput.value = totalValue.toFixed(2);
             }
         });
 
         paiementCredit.addEventListener('change', function() {
             if (this.checked) {
                 montantCashGroup.style.display = 'block';
-                montantCashInput.value = {{ total|tojson }};
+                montantCashInput.value = totalValue.toFixed(2);
             }
         });
 
@@ -1137,7 +1139,6 @@
         document.getElementById('finaliserForm').addEventListener('submit', function(e) {
             const paiementCreditChecked = document.getElementById('paiement_credit').checked;
             const montantCash = parseFloat(montantCashInput.value) || 0;
-            const total = {{ total|tojson }};
             
             // Validation pour le crédit
             if (paiementCreditChecked) {
@@ -1146,13 +1147,13 @@
                     e.preventDefault();
                     return false;
                 }
-                if (montantCash > total) {
-                    alert('Le montant en cash ne peut pas dépasser le total de ' + total.toFixed(2) + ' $');
+                if (montantCash > totalValue) {
+                    alert('Le montant en cash ne peut pas dépasser le total de ' + totalValue.toFixed(2) + ' $');
                     e.preventDefault();
                     return false;
                 }
-                if (montantCash === 0 && total > 0) {
-                    if (!confirm('Le client ne paye rien maintenant. Voulez-vous vraiment créer une dette de ' + total.toFixed(2) + ' $ ?')) {
+                if (montantCash === 0 && totalValue > 0) {
+                    if (!confirm('Le client ne paye rien maintenant. Voulez-vous vraiment créer une dette de ' + totalValue.toFixed(2) + ' $ ?')) {
                         e.preventDefault();
                         return false;
                     }
@@ -1278,5 +1279,106 @@
             font-size: 0.875rem;
         }
     }
+
+    /* Améliorations visuelles */
+    .card {
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08) !important;
+    }
+
+    .card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.12) !important;
+    }
+
+    .btn-primary, .btn-success, .btn-danger {
+        border-radius: 0.75rem;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary:hover, .btn-success:hover, .btn-danger:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    .form-control, .form-select, input[type="number"] {
+        border-radius: 0.75rem;
+        border: 2px solid #e9ecef;
+        transition: all 0.3s ease;
+        font-weight: 500;
+    }
+
+    .form-control:focus, .form-select:focus, input[type="number"]:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+    }
+
+    .badge {
+        border-radius: 0.75rem;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+    }
+
+    .form-check-input {
+        width: 1.5rem;
+        height: 1.5rem;
+        border: 2px solid #dee2e6;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .form-check-input:checked {
+        background-color: #667eea;
+        border-color: #667eea;
+    }
+
+    .form-check {
+        cursor: pointer;
+    }
+
+    .form-check-label {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .bg-gradient-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+
+    .bg-gradient-success {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+    }
+
+    .bg-gradient-light {
+        background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%) !important;
+    }
+
+    .rounded-4 {
+        border-radius: 1.5rem !important;
+    }
+
+    .rounded-3 {
+        border-radius: 0.75rem !important;
+    }
+
+    .shadow-md {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .text-center .fa-4x {
+        opacity: 0.5;
+    }
+
+    .thermal-receipt {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
 </style>
-{% endblock %
+{% endblock %}

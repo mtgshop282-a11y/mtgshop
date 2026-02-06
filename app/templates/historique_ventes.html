@@ -1,182 +1,910 @@
 {% extends "layout.html" %}
 
-{% block title %}Historique des Ventes{% endblock %}
+{% block title %}Historique des Ventes - MKM Shop{% endblock %}
+
+{% block page_title %}<i class="fas fa-history me-2"></i> Historique des Ventes{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h1 class="mt-5 text-center"><i class="fas fa-history me-2"></i> Historique des Ventes</h1>
-
-    <!-- Formulaire de filtrage -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2C3E50;">
-            <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i> Filtrer les Ventes</h5>
+<div class="container-fluid px-3 py-4">
+    <!-- En-tête -->
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+        <div class="mb-3 mb-md-0">
+            <h1 class="h4 mb-1 text-dark fw-bold">
+                <i class="fas fa-history text-primary me-2"></i>Historique des Ventes
+            </h1>
+            <p class="text-muted small mb-0">Consultez l'historique complet de vos ventes</p>
         </div>
-        <div class="card-body">
+        <div class="d-flex align-items-center">
+            <span class="badge bg-success fs-6 me-3">
+                <i class="fas fa-shopping-cart me-1"></i>
+                <span>{{ ventes|length }}</span> vente(s)
+            </span>
+            <span class="badge bg-primary fs-6">
+                <i class="fas fa-dollar-sign me-1"></i>
+                <span id="totalVentesHeader">
+                    {% if stats and stats.total_toutes %}
+                        {{ "%.2f"|format(stats.total_toutes) }}
+                    {% else %}
+                        0.00
+                    {% endif %}
+                </span> $
+            </span>
+        </div>
+    </div>
+
+    <!-- Cartes de statistiques -->
+    <div class="row g-4">
+        <div class="col-12">
             <div class="row g-3">
-                <!-- Filtre par date de début -->
-                <div class="col-md-3">
-                    <label for="filterDateStart" class="form-label">Date de début</label>
-                    <input type="date" class="form-control" id="filterDateStart">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-day fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold">
+                                {% if stats and stats.ventes_ajd %}
+                                    {{ stats.ventes_ajd }}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </h4>
+                            <small>Aujourd'hui</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                {% if stats and stats.total_ajd %}
+                                    {{ "%.2f"|format(stats.total_ajd) }}
+                                {% else %}
+                                    0.00
+                                {% endif %} $
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Filtre par date de fin -->
-                <div class="col-md-3">
-                    <label for="filterDateEnd" class="form-label">Date de fin</label>
-                    <input type="date" class="form-control" id="filterDateEnd">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-week fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold">
+                                {% if stats and stats.ventes_semaine %}
+                                    {{ stats.ventes_semaine }}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </h4>
+                            <small>Cette semaine</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                {% if stats and stats.total_semaine %}
+                                    {{ "%.2f"|format(stats.total_semaine) }}
+                                {% else %}
+                                    0.00
+                                {% endif %} $
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Filtre par nom de produit -->
-                <div class="col-md-3">
-                    <label for="filterProduct" class="form-label">Nom du produit</label>
-                    <input type="text" class="form-control" id="filterProduct" placeholder="Rechercher par produit...">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-calendar-alt fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold">
+                                {% if stats and stats.ventes_mois %}
+                                    {{ stats.ventes_mois }}
+                                {% else %}
+                                    0
+                                {% endif %}
+                            </h4>
+                            <small>Ce mois</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                {% if stats and stats.total_mois %}
+                                    {{ "%.2f"|format(stats.total_mois) }}
+                                {% else %}
+                                    0.00
+                                {% endif %} $
+                            </div>
+                        </div>
+                    </div>
                 </div>
-
-                <!-- Filtre par numéro de facture -->
-                <div class="col-md-3">
-                    <label for="filterFacture" class="form-label">Facture</label>
-                    <input type="text" class="form-control" id="filterFacture" placeholder="Rechercher par facture...">
+                <div class="col-6 col-md-3">
+                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                        <div class="card-body text-white">
+                            <i class="fas fa-chart-line fa-2x mb-2"></i>
+                            <h4 class="mb-0 fw-bold">{{ ventes|length }}</h4>
+                            <small>Total historique</small>
+                            <div class="mt-2 small">
+                                <i class="fas fa-coins me-1"></i>
+                                {% if stats and stats.total_toutes %}
+                                    {{ "%.2f"|format(stats.total_toutes) }}
+                                {% else %}
+                                    0.00
+                                {% endif %} $
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Boutons pour réinitialiser les filtres, exporter en CSV et imprimer -->
-            <div class="mt-3 d-flex justify-content-between">
-                <button type="button" id="resetFilters" class="btn btn-secondary">
-                    <i class="fas fa-sync-alt me-2"></i> Réinitialiser les filtres
-                </button>
-                <div>
-                    <button type="button" id="exportCSV" class="btn btn-success me-2">
-                        <i class="fas fa-file-csv me-2"></i> Exporter en CSV
-                    </button>
-                    <button type="button" id="printButton" class="btn btn-primary">
-                        <i class="fas fa-print me-2"></i> Imprimer
-                    </button>
+        <!-- Panel des filtres -->
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-gradient-primary text-white py-3">
+                    <h5 class="card-title mb-0 d-flex align-items-center">
+                        <i class="fas fa-filter me-2"></i> Filtres de recherche
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Dates -->
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterDateStart" class="form-label fw-semibold">
+                                        <i class="fas fa-calendar-start text-primary me-1"></i> Date début
+                                    </label>
+                                    <input type="date" class="form-control" id="filterDateStart">
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterDateEnd" class="form-label fw-semibold">
+                                        <i class="fas fa-calendar-end text-primary me-1"></i> Date fin
+                                    </label>
+                                    <input type="date" class="form-control" id="filterDateEnd">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recherches -->
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterProduct" class="form-label fw-semibold">
+                                        <i class="fas fa-box text-primary me-1"></i> Produit
+                                    </label>
+                                    <input type="text" class="form-control" id="filterProduct" placeholder="Nom du produit...">
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterFacture" class="form-label fw-semibold">
+                                        <i class="fas fa-file-invoice text-primary me-1"></i> Facture
+                                    </label>
+                                    <input type="text" class="form-control" id="filterFacture" placeholder="N° de facture...">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Type de paiement et livraison -->
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterPaiement" class="form-label fw-semibold">
+                                        <i class="fas fa-money-bill-wave text-primary me-1"></i> Paiement
+                                    </label>
+                                    <select class="form-select" id="filterPaiement">
+                                        <option value="">Tous les types</option>
+                                        <option value="comptant">Comptant</option>
+                                        <option value="credit">Crédit</option>
+                                    </select>
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterLivraison" class="form-label fw-semibold">
+                                        <i class="fas fa-truck text-primary me-1"></i> Livraison
+                                    </label>
+                                    <select class="form-select" id="filterLivraison">
+                                        <option value="">Tous les types</option>
+                                        <option value="sur_place">Sur place</option>
+                                        <option value="depot">Dépôt</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Client et quantité min/max -->
+                        <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterClient" class="form-label fw-semibold">
+                                        <i class="fas fa-user text-primary me-1"></i> Client
+                                    </label>
+                                    <input type="text" class="form-control" id="filterClient" placeholder="Nom du client...">
+                                </div>
+                                <div class="col-12 col-sm-6">
+                                    <label for="filterMontantMin" class="form-label fw-semibold">
+                                        <i class="fas fa-dollar-sign text-primary me-1"></i> Montant min
+                                    </label>
+                                    <input type="number" class="form-control" id="filterMontantMin" placeholder="0.00" step="0.01" min="0">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Boutons d'action -->
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <div class="d-flex flex-wrap gap-2 justify-content-between">
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" id="resetFilters" class="btn btn-outline-secondary d-flex align-items-center">
+                                        <i class="fas fa-sync-alt me-2"></i>
+                                        <span class="d-none d-sm-inline">Réinitialiser</span>
+                                    </button>
+                                    <button type="button" id="btnToday" class="btn btn-primary d-flex align-items-center">
+                                        <i class="fas fa-calendar-day me-2"></i>
+                                        <span class="d-none d-sm-inline">Aujourd'hui</span>
+                                    </button>
+                                    <button type="button" id="btnWeek" class="btn btn-primary d-flex align-items-center">
+                                        <i class="fas fa-calendar-week me-2"></i>
+                                        <span class="d-none d-sm-inline">Semaine</span>
+                                    </button>
+                                    <button type="button" id="btnMonth" class="btn btn-primary d-flex align-items-center">
+                                        <i class="fas fa-calendar-alt me-2"></i>
+                                        <span class="d-none d-sm-inline">Mois</span>
+                                    </button>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <button type="button" id="exportCSV" class="btn btn-success d-flex align-items-center">
+                                        <i class="fas fa-file-csv me-2"></i>
+                                        <span class="d-none d-md-inline">Exporter CSV</span>
+                                    </button>
+                                    <button type="button" id="printButton" class="btn btn-primary d-flex align-items-center">
+                                        <i class="fas fa-print me-2"></i>
+                                        <span class="d-none d-md-inline">Imprimer</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Résumé des filtres actifs -->
+    <div class="row mt-3" id="activeFiltersContainer" style="display: none;">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted me-2">Filtres actifs :</small>
+                            <div id="activeFilters" class="d-inline-flex flex-wrap gap-1"></div>
+                        </div>
+                        <button type="button" id="clearFilters" class="btn btn-sm btn-outline-danger">
+                            <i class="fas fa-times me-1"></i> Effacer tous
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
     <!-- Tableau des ventes -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #27AE60;">
-            <h5 class="card-title mb-0"><i class="fas fa-list me-2"></i> Liste des Ventes</h5>
-        </div>
-        <div class="card-body">
-            <table class="table table-striped table-hover">
-                <thead style="background-color: #2c3e50; color: white;">
-                    <tr>
-                        <th class="text-center">Date</th>
-                        <th class="text-center">Facture</th>
-                        <th class="text-center">Produit</th>
-                        <th class="text-center">Quantité</th>
-                        <th class="text-center">Montant Total</th>
-                    </tr>
-                </thead>
-                <tbody id="ventesTableBody">
-                    {% for vente in ventes %}
-                    <tr data-date="{{ vente.facture.date_facture.strftime('%Y-%m-%d') }}" data-facture="{{ vente.facture.id }}" data-produit="{{ vente.produit.nom }}">
-                        <td class="text-center">{{ vente.facture.date_facture.strftime('%d/%m/%Y %H:%M') }}</td>
-                        <td class="text-center">{{ vente.facture.id }}</td>
-                        <td class="text-center">{{ vente.produit.nom }}</td>
-                        <td class="text-center">{{ vente.quantite }}</td>
-                        <td class="text-center">{{ vente.montant_total }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-
-            <!-- Total des ventes -->
-            <div class="text-center mt-4 p-3 bg-light rounded shadow-sm">
-                <h3 class="text-success mb-0">
-                    <i class="fas fa-coins me-2"></i>
-                    <strong>Total des ventes : <span id="totalVentes">0.00</span></strong>
-                </h3>
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-gradient-success text-white py-3">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                        <h5 class="card-title mb-0 d-flex align-items-center mb-3 mb-md-0">
+                            <i class="fas fa-list me-2"></i> Détail des ventes
+                        </h5>
+                        <div class="d-flex flex-wrap gap-2 w-100 w-md-auto">
+                            <div class="flex-grow-1" style="min-width: 200px;">
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-white">
+                                        <i class="fas fa-search text-muted"></i>
+                                    </span>
+                                    <input type="text" id="searchGlobal" class="form-control" 
+                                           placeholder="Rechercher dans toutes les colonnes...">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="text-center">
+                                        <i class="fas fa-calendar me-1"></i> Date
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-file-invoice me-1"></i> Facture
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-box me-1"></i> Produit
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-hashtag me-1"></i> Quantité
+                                    </th>
+                                    <th class="text-center">
+                                        <i class="fas fa-dollar-sign me-1"></i> Prix unitaire
+                                    </th>
+                                    <th class="text-center d-none d-lg-table-cell">
+                                        <i class="fas fa-money-bill-wave me-1"></i> Total
+                                    </th>
+                                    <th class="text-center d-none d-md-table-cell">
+                                        <i class="fas fa-user me-1"></i> Client
+                                    </th>
+                                    <th class="text-center d-none d-lg-table-cell">
+                                        <i class="fas fa-money-bill me-1"></i> Paiement
+                                    </th>
+                                    <th class="text-center d-none d-md-table-cell">
+                                        <i class="fas fa-truck me-1"></i> Livraison
+                                    </th>
+                                   
+                                </tr>
+                            </thead>
+                            <tbody id="ventesTableBody">
+                                {% for vente in ventes %}
+                                <tr data-date="{% if vente.facture and vente.facture.date_facture %}{{ vente.facture.date_facture.strftime('%Y-%m-%d') }}{% endif %}"
+                                    data-facture="{% if vente.facture %}{{ vente.facture.id }}{% endif %}"
+                                    data-produit="{% if vente.produit %}{{ vente.produit.nom|lower }}{% endif %}"
+                                    data-client="{% if vente.facture and vente.facture.nom_client %}{{ vente.facture.nom_client|lower }}{% endif %}"
+                                    data-montant="{{ vente.montant_total if vente.montant_total else 0 }}"
+                                    data-paiement="{% if vente.facture %}{% if vente.facture.paiement_credit %}credit{% else %}comptant{% endif %}{% else %}comptant{% endif %}"
+                                    data-livraison="{% if vente.facture %}{{ vente.facture.type_livraison }}{% else %}sur_place{% endif %}"
+                                    data-quantite="{{ vente.quantite }}">
+                                    <td class="text-center">
+                                        {% if vente.facture and vente.facture.date_facture %}
+                                            <small class="text-muted d-block">{{ vente.facture.date_facture.strftime('%d/%m/%Y') }}</small>
+                                            <small class="text-muted">{{ vente.facture.date_facture.strftime('%H:%M') }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center fw-semibold">
+                                        {% if vente.facture %}
+                                            <span class="badge bg-info">{{ vente.facture.id }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        {% if vente.produit %}
+                                            {{ vente.produit.nom }}
+                                            <small class="d-block text-muted">
+                                                {% if vente.produit.prix %}
+                                                    {{ "%.2f"|format(vente.produit.prix) }} $
+                                                {% else %}
+                                                    0.00 $
+                                                {% endif %}
+                                            </small>
+                                        {% else %}
+                                            <span class="text-muted">Produit supprimé</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-secondary">{{ vente.quantite }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        {% set prix_unitaire = None %}
+                                        {% if vente.prix_unitaire is defined %}
+                                            {% set prix_unitaire = vente.prix_unitaire %}
+                                        {% elif vente.quantite and vente.quantite > 0 and vente.montant_total %}
+                                            {% set prix_unitaire = vente.montant_total / vente.quantite %}
+                                        {% endif %}
+                                        
+                                        {% if prix_unitaire %}
+                                            <span class="fw-semibold">{{ "%.2f"|format(prix_unitaire) }} $</span>
+                                        {% else %}
+                                            <span class="fw-semibold">0.00 $</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center d-none d-lg-table-cell">
+                                        <span class="badge bg-success fs-6">
+                                            {% if vente.montant_total %}
+                                                {{ "%.2f"|format(vente.montant_total) }}
+                                            {% else %}
+                                                0.00
+                                            {% endif %} $
+                                        </span>
+                                    </td>
+                                    <td class="text-center d-none d-md-table-cell">
+                                        <small class="text-muted">
+                                            {% if vente.facture and vente.facture.nom_client %}
+                                                {{ vente.facture.nom_client }}
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td class="text-center d-none d-lg-table-cell">
+                                        {% if vente.facture %}
+                                            {% if vente.facture.paiement_credit %}
+                                                <span class="badge bg-warning">Crédit</span>
+                                            {% else %}
+                                                <span class="badge bg-success">Comptant</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-center d-none d-md-table-cell">
+                                        {% if vente.facture %}
+                                            {% if vente.facture.type_livraison == 'depot' %}
+                                                <span class="badge bg-info">Dépôt</span>
+                                            {% else %}
+                                                <span class="badge bg-secondary">Sur place</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="badge bg-secondary">-</span>
+                                        {% endif %}
+                                    </td>
+                                    
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="10" class="text-center py-5">
+                                        <i class="fas fa-shopping-cart fa-3x text-muted mb-3"></i>
+                                        <h5 class="text-muted">Aucune vente trouvée</h5>
+                                        <p class="text-muted">Aucune vente n'a été enregistrée</p>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Résumé et pagination -->
+                <div class="card-footer bg-light py-2">
+                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center">
+                        <div>
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <span id="visible-count">{{ ventes|length }}</span> vente(s) affichée(s) sur {{ ventes|length }}
+                            </small>
+                        </div>
+                        <div class="mt-2 mt-md-0">
+                            <small class="text-muted fw-bold">
+                                <i class="fas fa-coins me-1"></i>
+                                Total filtré : <span id="totalVentes" class="text-success">0.00</span> $
+                            </small>
+                        </div>
+                        <div class="mt-2 mt-md-0">
+                            <small class="text-muted">
+                                <i class="fas fa-sync-alt me-1"></i>
+                                Actualisé : 
+                                {% if current_time %}
+                                    {{ current_time.strftime('%H:%M') }}
+                                {% else %}
+                                    {{ now().strftime('%H:%M') }}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Script pour le filtrage, le total des ventes, l'export en CSV et l'impression -->
+<!-- Modal pour les détails -->
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-labelledby="detailsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="detailsModalLabel">
+                    <i class="fas fa-info-circle me-2"></i> Détails de la vente
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="venteDetails">
+                    <!-- Les détails seront chargés ici -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="fas fa-times me-2"></i> Fermer
+                </button>
+                <button type="button" class="btn btn-primary" id="printDetails">
+                    <i class="fas fa-print me-2"></i> Imprimer
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const filterDateStart = document.getElementById('filterDateStart');
-        const filterDateEnd = document.getElementById('filterDateEnd');
-        const filterProduct = document.getElementById('filterProduct');
-        const filterFacture = document.getElementById('filterFacture');
-        const ventesTableBody = document.getElementById('ventesTableBody');
-        const rows = Array.from(ventesTableBody.getElementsByTagName('tr'));
-        const totalVentes = document.getElementById('totalVentes');
-        const exportCSVButton = document.getElementById('exportCSV');
-        const printButton = document.getElementById('printButton');
+document.addEventListener('DOMContentLoaded', function() {
+    // Éléments DOM
+    const filterDateStart = document.getElementById('filterDateStart');
+    const filterDateEnd = document.getElementById('filterDateEnd');
+    const filterProduct = document.getElementById('filterProduct');
+    const filterFacture = document.getElementById('filterFacture');
+    const filterPaiement = document.getElementById('filterPaiement');
+    const filterLivraison = document.getElementById('filterLivraison');
+    const filterClient = document.getElementById('filterClient');
+    const filterMontantMin = document.getElementById('filterMontantMin');
+    const searchGlobal = document.getElementById('searchGlobal');
+    const ventesTableBody = document.getElementById('ventesTableBody');
+    const rows = Array.from(ventesTableBody.querySelectorAll('tr[data-date]'));
+    const totalVentes = document.getElementById('totalVentes');
+    const visibleCount = document.getElementById('visible-count');
+    const exportCSVButton = document.getElementById('exportCSV');
+    const printButton = document.getElementById('printButton');
+    const resetFilters = document.getElementById('resetFilters');
+    const clearFilters = document.getElementById('clearFilters');
+    const btnToday = document.getElementById('btnToday');
+    const btnWeek = document.getElementById('btnWeek');
+    const btnMonth = document.getElementById('btnMonth');
+    const activeFiltersContainer = document.getElementById('activeFiltersContainer');
+    const activeFilters = document.getElementById('activeFilters');
 
-        // Fonction pour obtenir la date du jour au format YYYY-MM-DD
-        function getTodayDate() {
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = String(today.getMonth() + 1).padStart(2, '0');
-            const day = String(today.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+    // Variables pour le suivi des filtres
+    let activeFiltersList = [];
+
+    // Fonction pour formater la date
+    function formatDate(date) {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+
+    // Fonction pour obtenir la date d'aujourd'hui
+    function getTodayDate() {
+        return formatDate(new Date());
+    }
+
+    // Fonction pour obtenir les dates de la semaine
+    function getWeekDates() {
+        const now = new Date();
+        const startOfWeek = new Date(now);
+        startOfWeek.setDate(now.getDate() - now.getDay());
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        
+        return {
+            start: formatDate(startOfWeek),
+            end: formatDate(endOfWeek)
+        };
+    }
+
+    // Fonction pour obtenir les dates du mois
+    function getMonthDates() {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        
+        return {
+            start: formatDate(startOfMonth),
+            end: formatDate(endOfMonth)
+        };
+    }
+
+    // Fonction pour mettre à jour les filtres actifs
+    function updateActiveFilters() {
+        activeFiltersList = [];
+        activeFilters.innerHTML = '';
+        
+        if (filterDateStart.value) {
+            activeFiltersList.push({type: 'date', value: filterDateStart.value, label: 'Début: ' + filterDateStart.value});
+        }
+        if (filterDateEnd.value) {
+            activeFiltersList.push({type: 'date', value: filterDateEnd.value, label: 'Fin: ' + filterDateEnd.value});
+        }
+        if (filterProduct.value) {
+            activeFiltersList.push({type: 'product', value: filterProduct.value, label: 'Produit: ' + filterProduct.value});
+        }
+        if (filterFacture.value) {
+            activeFiltersList.push({type: 'facture', value: filterFacture.value, label: 'Facture: ' + filterFacture.value});
+        }
+        if (filterPaiement.value) {
+            const paiementLabel = filterPaiement.value === 'comptant' ? 'Comptant' : 'Crédit';
+            activeFiltersList.push({type: 'paiement', value: filterPaiement.value, label: 'Paiement: ' + paiementLabel});
+        }
+        if (filterLivraison.value) {
+            const livraisonLabel = filterLivraison.value === 'sur_place' ? 'Sur place' : 'Dépôt';
+            activeFiltersList.push({type: 'livraison', value: filterLivraison.value, label: 'Livraison: ' + livraisonLabel});
+        }
+        if (filterClient.value) {
+            activeFiltersList.push({type: 'client', value: filterClient.value, label: 'Client: ' + filterClient.value});
+        }
+        if (filterMontantMin.value) {
+            activeFiltersList.push({type: 'montant', value: filterMontantMin.value, label: 'Montant min: ' + filterMontantMin.value + ' $'});
+        }
+        if (searchGlobal.value) {
+            activeFiltersList.push({type: 'search', value: searchGlobal.value, label: 'Recherche: ' + searchGlobal.value});
         }
 
-        // Fonction pour filtrer les ventes
-        function filterVentes() {
-            const startDate = filterDateStart.value || getTodayDate(); // Par défaut, la date du jour
-            const endDate = filterDateEnd.value || getTodayDate(); // Par défaut, la date du jour
-            const product = filterProduct.value.toLowerCase();
-            const facture = filterFacture.value.toLowerCase();
+        // Afficher les filtres actifs
+        activeFiltersList.forEach(filter => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary';
+            badge.innerHTML = filter.label + ' <i class="fas fa-times ms-1" style="cursor:pointer;" data-type="' + filter.type + '"></i>';
+            activeFilters.appendChild(badge);
+        });
 
-            let total = 0;
+        // Afficher/masquer le conteneur
+        if (activeFiltersList.length > 0) {
+            activeFiltersContainer.style.display = 'block';
+        } else {
+            activeFiltersContainer.style.display = 'none';
+        }
+    }
 
-            rows.forEach(row => {
-                const date = row.getAttribute('data-date');
-                const rowFacture = row.getAttribute('data-facture').toLowerCase();
-                const rowProduct = row.getAttribute('data-produit').toLowerCase();
+    // Fonction pour extraire le texte d'une cellule
+    function getCellText(cell) {
+        return cell.textContent.trim().toLowerCase();
+    }
 
-                const matchesDate = date >= startDate && date <= endDate;
-                const matchesProduct = !product || rowProduct.includes(product);
-                const matchesFacture = !facture || rowFacture.includes(facture);
-
-                if (matchesDate && matchesProduct && matchesFacture) {
-                    row.style.display = '';
-                    total += parseFloat(row.cells[4].textContent); // Ajouter au total
-                } else {
-                    row.style.display = 'none';
+    // Fonction principale de filtrage
+    function filterVentes() {
+        const startDate = filterDateStart.value;
+        const endDate = filterDateEnd.value;
+        const product = filterProduct.value.toLowerCase().trim();
+        const facture = filterFacture.value.toLowerCase().trim();
+        const paiement = filterPaiement.value;
+        const livraison = filterLivraison.value;
+        const client = filterClient.value.toLowerCase().trim();
+        const montantMin = parseFloat(filterMontantMin.value) || 0;
+        const search = searchGlobal.value.toLowerCase().trim();
+        
+        let total = 0;
+        let visible = 0;
+        
+        rows.forEach(row => {
+            const date = row.getAttribute('data-date') || '';
+            const rowFacture = (row.getAttribute('data-facture') || '').toString().toLowerCase();
+            const rowProduct = row.getAttribute('data-produit') || '';
+            const rowClient = row.getAttribute('data-client') || '';
+            const rowMontant = parseFloat(row.getAttribute('data-montant') || 0);
+            const rowPaiement = row.getAttribute('data-paiement') || '';
+            const rowLivraison = row.getAttribute('data-livraison') || '';
+            
+            // Vérifier tous les critères
+            const matchesDate = (!startDate || date >= startDate) && (!endDate || date <= endDate);
+            const matchesProduct = !product || rowProduct.includes(product);
+            const matchesFacture = !facture || rowFacture.includes(facture);
+            const matchesPaiement = !paiement || rowPaiement === paiement;
+            const matchesLivraison = !livraison || rowLivraison === livraison;
+            const matchesClient = !client || rowClient.includes(client);
+            const matchesMontant = rowMontant >= montantMin;
+            
+            // Recherche globale
+            let matchesSearch = false;
+            if (!search) {
+                matchesSearch = true;
+            } else {
+                const cells = row.cells;
+                for (let i = 0; i < cells.length - 1; i++) {
+                    const cellText = getCellText(cells[i]);
+                    if (cellText.includes(search)) {
+                        matchesSearch = true;
+                        break;
+                    }
                 }
-            });
+                
+                if (!matchesSearch && (
+                    rowProduct.includes(search) || 
+                    rowClient.includes(search) ||
+                    rowFacture.includes(search)
+                )) {
+                    matchesSearch = true;
+                }
+            }
+            
+            const isVisible = matchesDate && matchesProduct && matchesFacture && 
+                            matchesPaiement && matchesLivraison && matchesClient && 
+                            matchesMontant && matchesSearch;
+            
+            if (isVisible) {
+                row.style.display = '';
+                total += rowMontant;
+                visible++;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        
+        // Mettre à jour les totaux
+        totalVentes.textContent = total.toFixed(2);
+        visibleCount.textContent = visible;
+        
+        // Mettre à jour les filtres actifs
+        updateActiveFilters();
+    }
 
-            totalVentes.textContent = total.toFixed(2); // Afficher le total
+    // Fonction pour initialiser les totaux
+    function updateTotals() {
+        let total = 0;
+        rows.forEach(row => {
+            const montant = parseFloat(row.getAttribute('data-montant') || 0);
+            total += montant;
+        });
+        totalVentes.textContent = total.toFixed(2);
+    }
+
+    // Fonctions pour les boutons de période
+    function setToday() {
+        const today = getTodayDate();
+        filterDateStart.value = today;
+        filterDateEnd.value = today;
+        filterProduct.value = '';
+        filterFacture.value = '';
+        filterPaiement.value = '';
+        filterLivraison.value = '';
+        filterClient.value = '';
+        filterMontantMin.value = '';
+        searchGlobal.value = '';
+        filterVentes();
+    }
+
+    function setWeek() {
+        const week = getWeekDates();
+        filterDateStart.value = week.start;
+        filterDateEnd.value = week.end;
+        filterProduct.value = '';
+        filterFacture.value = '';
+        filterPaiement.value = '';
+        filterLivraison.value = '';
+        filterClient.value = '';
+        filterMontantMin.value = '';
+        searchGlobal.value = '';
+        filterVentes();
+    }
+
+    function setMonth() {
+        const month = getMonthDates();
+        filterDateStart.value = month.start;
+        filterDateEnd.value = month.end;
+        filterProduct.value = '';
+        filterFacture.value = '';
+        filterPaiement.value = '';
+        filterLivraison.value = '';
+        filterClient.value = '';
+        filterMontantMin.value = '';
+        searchGlobal.value = '';
+        filterVentes();
+    }
+
+    // Fonction pour réinitialiser tous les filtres
+    function resetAllFilters() {
+        filterDateStart.value = '';
+        filterDateEnd.value = '';
+        filterProduct.value = '';
+        filterFacture.value = '';
+        filterPaiement.value = '';
+        filterLivraison.value = '';
+        filterClient.value = '';
+        filterMontantMin.value = '';
+        searchGlobal.value = '';
+        filterVentes();
+    }
+
+    // Fonction pour exporter en CSV
+    function exportToCSV() {
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+        
+        if (visibleRows.length === 0) {
+            alert('Aucune vente à exporter');
+            return;
         }
+        
+        const headers = ["Date", "Heure", "Facture", "Produit", "Quantité", "Prix Unitaire", "Montant Total", "Client", "Paiement", "Livraison"];
+        let csvContent = headers.join(";") + "\n";
+        
+        visibleRows.forEach(row => {
+            const cells = row.cells;
+            
+            // Extraire les données
+            let date = '', time = '', facture = '', produit = '', quantite = '', prix = '', total = '', client = '', paiement = '', livraison = '';
+            
+            // Date et heure
+            const dateElements = cells[0].querySelectorAll('small');
+            if (dateElements.length >= 2) {
+                date = dateElements[0]?.textContent?.trim() || '';
+                time = dateElements[1]?.textContent?.trim() || '';
+            }
+            
+            // Facture
+            const factureBadge = cells[1].querySelector('.badge');
+            facture = factureBadge?.textContent?.trim() || cells[1].textContent.trim();
+            
+            // Produit
+            const produitText = cells[2].textContent.trim();
+            produit = produitText.split('\n')[0].trim();
+            
+            // Quantité
+            const quantiteBadge = cells[3].querySelector('.badge');
+            quantite = quantiteBadge?.textContent?.trim() || cells[3].textContent.trim();
+            
+            // Prix
+            prix = cells[4].textContent.trim().replace('$', '').trim();
+            
+            // Total
+            if (cells[5]) {
+                const totalBadge = cells[5].querySelector('.badge');
+                total = totalBadge?.textContent?.trim().replace('$', '').trim() || row.getAttribute('data-montant');
+            } else {
+                total = row.getAttribute('data-montant');
+            }
+            
+            // Client
+            if (cells[6]) {
+                client = cells[6].textContent.trim();
+            }
+            
+            // Paiement
+            if (cells[7]) {
+                paiement = cells[7].textContent.trim();
+            }
+            
+            // Livraison
+            if (cells[8]) {
+                livraison = cells[8].textContent.trim();
+            }
+            
+            csvContent += `"${date}";"${time}";"${facture}";"${produit}";${quantite};${prix};${total};"${client}";"${paiement}";"${livraison}"\n`;
+        });
+        
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `ventes_${new Date().toISOString().split('T')[0]}.csv`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
 
-        // Fonction pour exporter les données en CSV
-        function exportToCSV() {
-            const visibleRows = rows.filter(row => row.style.display !== 'none');
-            const headers = ["Date", "Facture", "Produit", "Quantité", "Montant Total"];
-            const csvContent = [
-                headers.join(","), // En-têtes
-                ...visibleRows.map(row => {
-                    const cells = Array.from(row.cells);
-                    return cells.map(cell => cell.textContent).join(",");
-                })
-            ].join("\n");
-
-            // Créer un fichier CSV et le télécharger
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "historique_ventes.csv";
-            link.click();
+    // Fonction pour imprimer
+    function printTable() {
+        const visibleRows = rows.filter(row => row.style.display !== 'none');
+        
+        if (visibleRows.length === 0) {
+            alert('Aucune vente à imprimer');
+            return;
         }
-
-        // Fonction pour imprimer le tableau
-        function printTable() {
-            const printContents = `
+        
+        const today = new Date().toLocaleDateString();
+        const time = new Date().toLocaleTimeString();
+        const startDate = filterDateStart.value || 'Toutes dates';
+        const endDate = filterDateEnd.value || 'Toutes dates';
+        const totalFiltered = totalVentes.textContent;
+        
+        let html = `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Historique des Ventes - MKM Shop</title>
                 <style>
-                    body { font-family: Arial, sans-serif; }
-                    table { width: 100%; border-collapse: collapse; }
-                    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                    th { background-color: #2c3e50; color: white; }
-                    .total { font-size: 1.2rem; font-weight: bold; text-align: center; margin-top: 20px; }
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                    .header h1 { color: #2c3e50; margin-bottom: 5px; font-size: 24px; }
+                    .header h3 { color: #555; margin-bottom: 10px; font-size: 18px; }
+                    .header p { color: #777; font-size: 14px; margin: 5px 0; }
+                    .summary { background: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #ddd; }
+                    .summary h4 { margin: 0; color: #28a745; font-size: 16px; }
+                    table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
+                    th { background-color: #2c3e50; color: white; padding: 10px; text-align: left; border: 1px solid #ddd; }
+                    td { border: 1px solid #ddd; padding: 8px; }
+                    .total-row { font-weight: bold; background-color: #f8f9fa; }
+                    .footer { margin-top: 30px; text-align: center; color: #777; font-size: 12px; border-top: 1px solid #ddd; padding-top: 20px; }
+                    @media print {
+                        body { margin: 0; }
+                        @page { margin: 20mm; }
+                        .no-print { display: none; }
+                    }
                 </style>
-                <h2 style="text-align: center;">Historique des Ventes</h2>
+            </head>
+            <body>
+                <div class="header">
+                    <h1>MKM SHOP</h1>
+                    <h3>HISTORIQUE DES VENTES</h3>
+                    <p>Période : ${startDate} - ${endDate}</p>
+                    <p>Généré le ${today} à ${time}</p>
+                </div>
+                
+                <div class="summary">
+                    <h4>RÉSUMÉ : ${visibleRows.length} vente(s) - Total : ${totalFiltered} $</h4>
+                </div>
+                
                 <table>
                     <thead>
                         <tr>
@@ -184,124 +912,318 @@
                             <th>Facture</th>
                             <th>Produit</th>
                             <th>Quantité</th>
-                            <th>Montant Total</th>
+                            <th>Prix Unitaire</th>
+                            <th>Total</th>
+                            <th>Client</th>
+                            <th>Paiement</th>
+                            <th>Livraison</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${Array.from(rows)
-                            .filter(row => row.style.display !== 'none')
-                            .map(row => `
-                                <tr>
-                                    <td>${row.cells[0].textContent}</td>
-                                    <td>${row.cells[1].textContent}</td>
-                                    <td>${row.cells[2].textContent}</td>
-                                    <td>${row.cells[3].textContent}</td>
-                                    <td>${row.cells[4].textContent}</td>
-                                </tr>
-                            `).join('')}
+        `;
+        
+        visibleRows.forEach(row => {
+            const cells = row.cells;
+            
+            let date = '', time = '', facture = '', produit = '', quantite = '', prix = '', total = '', client = '', paiement = '', livraison = '';
+            
+            // Date et heure
+            const dateElements = cells[0].querySelectorAll('small');
+            if (dateElements.length >= 2) {
+                date = dateElements[0]?.textContent?.trim() || '';
+                time = dateElements[1]?.textContent?.trim() || '';
+            }
+            
+            // Facture
+            const factureBadge = cells[1].querySelector('.badge');
+            facture = factureBadge?.textContent?.trim() || cells[1].textContent;
+            
+            // Produit
+            produit = cells[2].textContent.split('\n')[0].trim();
+            
+            // Quantité
+            const quantiteBadge = cells[3].querySelector('.badge');
+            quantite = quantiteBadge?.textContent?.trim() || cells[3].textContent;
+            
+            // Prix
+            prix = cells[4].textContent;
+            
+            // Total
+            if (cells[5]) {
+                total = cells[5].textContent;
+            } else {
+                total = row.getAttribute('data-montant') + ' $';
+            }
+            
+            // Client
+            if (cells[6]) {
+                client = cells[6].textContent;
+            } else {
+                client = '-';
+            }
+            
+            // Paiement
+            if (cells[7]) {
+                paiement = cells[7].textContent;
+            } else {
+                paiement = '-';
+            }
+            
+            // Livraison
+            if (cells[8]) {
+                livraison = cells[8].textContent;
+            } else {
+                livraison = '-';
+            }
+            
+            html += `
+                <tr>
+                    <td>${date} ${time}</td>
+                    <td>${facture}</td>
+                    <td>${produit}</td>
+                    <td>${quantite}</td>
+                    <td>${prix}</td>
+                    <td>${total}</td>
+                    <td>${client}</td>
+                    <td>${paiement}</td>
+                    <td>${livraison}</td>
+                </tr>
+            `;
+        });
+        
+        html += `
                     </tbody>
+                    <tfoot>
+                        <tr class="total-row">
+                            <td colspan="5" style="text-align: right;"><strong>TOTAL :</strong></td>
+                            <td colspan="4"><strong>${totalFiltered} $</strong></td>
+                        </tr>
+                    </tfoot>
                 </table>
-                <div class="total">
-                    <strong>Total des ventes : ${totalVentes.textContent}</strong>
+                
+                <div class="footer">
+                    <p>MKM Shop - Gestion Commerciale</p>
+                    <p>Document généré automatiquement</p>
+                </div>
+                
+                <script>
+                    window.onload = function() {
+                        window.print();
+                        setTimeout(() => window.close(), 1000);
+                    };
+                <\/script>
+            </body>
+            </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(html);
+        printWindow.document.close();
+    }
+
+    // Fonction debounce pour optimiser les performances
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    // Écouteurs d'événements
+    const debouncedFilter = debounce(filterVentes, 300);
+    
+    // Écouteurs pour tous les filtres
+    [filterDateStart, filterDateEnd, filterProduct, filterFacture, filterPaiement, 
+     filterLivraison, filterClient, filterMontantMin, searchGlobal].forEach(element => {
+        if (element) {
+            element.addEventListener('input', debouncedFilter);
+            if (element.type === 'date' || element.tagName === 'SELECT') {
+                element.addEventListener('change', debouncedFilter);
+            }
+        }
+    });
+
+    // Écouteurs pour les boutons
+    if (resetFilters) resetFilters.addEventListener('click', resetAllFilters);
+    if (clearFilters) clearFilters.addEventListener('click', resetAllFilters);
+    if (btnToday) btnToday.addEventListener('click', setToday);
+    if (btnWeek) btnWeek.addEventListener('click', setWeek);
+    if (btnMonth) btnMonth.addEventListener('click', setMonth);
+    if (exportCSVButton) exportCSVButton.addEventListener('click', exportToCSV);
+    if (printButton) printButton.addEventListener('click', printTable);
+
+    // Écouteur pour supprimer les filtres individuels
+    activeFilters.addEventListener('click', function(e) {
+        if (e.target.classList.contains('fa-times')) {
+            const filterType = e.target.getAttribute('data-type');
+            switch(filterType) {
+                case 'date':
+                    filterDateStart.value = '';
+                    filterDateEnd.value = '';
+                    break;
+                case 'product':
+                    filterProduct.value = '';
+                    break;
+                case 'facture':
+                    filterFacture.value = '';
+                    break;
+                case 'paiement':
+                    filterPaiement.value = '';
+                    break;
+                case 'livraison':
+                    filterLivraison.value = '';
+                    break;
+                case 'client':
+                    filterClient.value = '';
+                    break;
+                case 'montant':
+                    filterMontantMin.value = '';
+                    break;
+                case 'search':
+                    searchGlobal.value = '';
+                    break;
+            }
+            filterVentes();
+        }
+    });
+
+    // Fonctions globales
+    window.viewDetails = function(venteId) {
+        const modal = new bootstrap.Modal(document.getElementById('detailsModal'));
+        document.getElementById('venteDetails').innerHTML = `
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Chargement...</span>
+                </div>
+                <p class="mt-2">Chargement des détails...</p>
+            </div>
+        `;
+        modal.show();
+        
+        setTimeout(() => {
+            document.getElementById('venteDetails').innerHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Fonctionnalité à implémenter.
+                </div>
+                <div class="text-center">
+                    <p>Vente ID: ${venteId}</p>
                 </div>
             `;
+        }, 1000);
+    };
 
-            const printWindow = window.open('', '', 'height=600,width=800');
-            printWindow.document.write(printContents);
-            printWindow.document.close();
-            printWindow.print();
-        }
+    window.printVente = function(venteId) {
+        const printContent = `
+            <html>
+            <head>
+                <title>Reçu de vente #${venteId}</title>
+                <style>
+                    body { font-family: Arial, sans-serif; margin: 20px; }
+                    .header { text-align: center; margin-bottom: 20px; }
+                    .details { margin: 20px 0; }
+                    .total { font-weight: bold; font-size: 18px; margin-top: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <h2>MKM SHOP</h2>
+                    <h3>Reçu de vente #${venteId}</h3>
+                    <p>Date : ${new Date().toLocaleDateString()}</p>
+                </div>
+                <p>Fonctionnalité d'impression détaillée à implémenter</p>
+            </body>
+            </html>
+        `;
+        
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.print();
+    };
 
-        // Appliquer les filtres lors de la modification des champs
-        filterDateStart.addEventListener('change', filterVentes);
-        filterDateEnd.addEventListener('change', filterVentes);
-        filterProduct.addEventListener('input', filterVentes);
-        filterFacture.addEventListener('input', filterVentes);
-
-        // Réinitialiser les filtres
-        document.getElementById('resetFilters').addEventListener('click', function() {
-            filterDateStart.value = '';
-            filterDateEnd.value = '';
-            filterProduct.value = '';
-            filterFacture.value = '';
-            filterVentes();
-        });
-
-        // Exporter en CSV
-        exportCSVButton.addEventListener('click', exportToCSV);
-
-        // Imprimer le tableau
-        printButton.addEventListener('click', printTable);
-
-        // Appliquer le filtre par défaut (ventes du jour) au chargement de la page
-        filterVentes();
-    });
+    // Initialiser
+    updateTotals();
+    setToday(); // Afficher par défaut les ventes d'aujourd'hui
+});
 </script>
 
-<!-- Styles supplémentaires -->
 <style>
-    /* Style du tableau */
-    .table {
-        border-collapse: collapse;
-        width: 100%;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    /* Styles spécifiques */
+    .card {
+        transition: transform 0.2s;
     }
-
-    .table th, .table td {
-        padding: 12px;
-        text-align: center; /* Centrer le texte dans les cellules */
-        border-bottom: 2px solid #ddd;
+    
+    .card:hover {
+        transform: translateY(-2px);
     }
-
-    .table th {
-        background-color: #2c3e50;
-        color: white;
-        font-weight: bold;
+    
+    .badge {
+        font-size: 0.85em;
+        padding: 0.35em 0.65em;
     }
-
-    .table tbody tr:hover {
-        background-color: #f5f5f5;
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 123, 255, 0.05);
     }
-
-    /* Style du total des ventes */
-    .bg-light {
-        background-color: #f8f9fa !important;
+    
+    /* Styles pour les filtres actifs */
+    #activeFilters .badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
     }
-
-    .text-success {
-        font-size: 1.5rem;
-        font-weight: bold;
+    
+    /* Boutons de période actifs */
+    .btn-primary.active {
+        background-color: #0d6efd;
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
     }
-
-    /* Style des boutons */
-    .btn-primary {
-        background-color: #007bff;
-        border-color: #007bff;
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .table-responsive {
+            font-size: 0.85rem;
+        }
+        
+        .btn {
+            font-size: 0.85rem;
+            padding: 0.25rem 0.5rem;
+        }
+        
+        .stat-card {
+            padding: 1rem !important;
+        }
+        
+        .stat-card i {
+            font-size: 1.5rem !important;
+        }
+        
+        .stat-card h4 {
+            font-size: 1.25rem !important;
+        }
+        
+        .d-flex.gap-2 {
+            gap: 0.5rem !important;
+        }
     }
-
-    .btn-primary:hover {
-        background-color: #0056b3;
-        border-color: #004085;
-    }
-
-    .btn-secondary {
-        background-color: #6c757d;
-        border-color: #6c757d;
-    }
-
-    .btn-secondary:hover {
-        background-color: #5a6268;
-        border-color: #545b62;
-    }
-
-    .btn-success {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
-
-    .btn-success:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
+    
+    @media (max-width: 576px) {
+        .container-fluid {
+            padding-left: 10px;
+            padding-right: 10px;
+        }
+        
+        .card-body {
+            padding: 1rem;
+        }
     }
 </style>
 {% endblock %}
