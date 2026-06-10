@@ -56,9 +56,23 @@ class TransactionsProduit(db.Model):
     def __repr__(self):
         return f"<Transaction {self.type} pour le produit {self.produit_id}>"
 
+class Clients(db.Model):
+    __tablename__ = 'clients'
+    id = db.Column(db.Integer, primary_key=True)
+    nom = db.Column(db.String(100), unique=True, nullable=False)
+    telephone = db.Column(db.String(50), nullable=True)
+    email = db.Column(db.String(100), nullable=True)
+    adresse = db.Column(db.String(200), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def __repr__(self):
+        return f"<Client {self.nom}>"
+
 class Factures(db.Model):
     __tablename__ = 'factures'
     id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=True)
     nom_client = db.Column(db.String(100), nullable=False)
     montant_total = db.Column(db.Float, nullable=False)
     date_facture = db.Column(db.DateTime, default=datetime.utcnow)
@@ -68,7 +82,10 @@ class Factures(db.Model):
     a_ete_en_credit = db.Column(db.Boolean, default=False)
     type_livraison = db.Column(db.String(20), default='sur_place')
     lieu_retrait = db.Column(db.String(50), nullable=True)
+    annulee = db.Column(db.Boolean, default=False)
+    date_annulation = db.Column(db.DateTime, nullable=True)
     
+    client = db.relationship('Clients', backref='factures', lazy=True)
     ventes = db.relationship('Ventes', backref='facture', lazy=True)
 
     def __repr__(self):

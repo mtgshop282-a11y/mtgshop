@@ -5,11 +5,13 @@ class PanierManager {
         this.total = 0;
         this.sessionId = this.getSessionId();
         this.searchTimeout = null;
+        this.clientsByName = {};
         this.init();
     }
     
     init() {
         this.chargerPanier();
+        this.chargerClients();
         this.setupEventListeners();
         this.setupModal();
         this.setupRealTimeValidation();
@@ -43,7 +45,30 @@ class PanierManager {
             this.afficherNotification('Erreur de chargement du panier', 'error');
         }
     }
-    
+
+    async chargerClients() {
+        try {
+            const response = await fetch('/api/clients');
+            const data = await response.json();
+
+            if (data.success && Array.isArray(data.clients)) {
+                const datalist = document.getElementById('clientsList');
+                if (datalist) {
+                    datalist.innerHTML = '';
+                    this.clientsByName = {};
+                    data.clients.forEach((client) => {
+                        const option = document.createElement('option');
+                        option.value = client.nom;
+                        datalist.appendChild(option);
+                        this.clientsByName[client.nom.toLowerCase()] = client.id;
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement des clients:', error);
+        }
+    }
+
     async ajouterProduit(produitId, quantite, prix) {
         try {
             const btn = document.getElementById('btn-ajouter-panier');
@@ -564,6 +589,17 @@ class PanierManager {
                 this.handleFinaliserVente();
             });
         }
+
+        const nomClientInput = document.getElementById('nom_client');
+        if (nomClientInput) {
+            nomClientInput.addEventListener('input', () => {
+                const value = nomClientInput.value.trim().toLowerCase();
+                const clientIdInput = document.getElementById('client_id');
+                if (clientIdInput) {
+                    clientIdInput.value = this.clientsByName[value] || '';
+                }
+            });
+        }
         
         // Gestion des boutons quantité
         const decrementBtn = document.getElementById('decrement-qte');
@@ -829,14 +865,22 @@ class PanierManager {
     validerFormulaire() {
         const nomClient = document.getElementById('nom_client')?.value.trim() || '';
         const paiementCredit = document.getElementById('paiement_credit')?.checked || false;
+        const clientId = document.getElementById('client_id')?.value.trim() || '';
         const montantCash = parseFloat(document.getElementById('montant_cash')?.value) || 0;
         const total = this.total;
         
         let isValid = true;
         
-        if (!nomClient) {
-            isValid = false;
-        } else if (paiementCredit) {
+        // Pour les ventes à crédit, la sélection d'un client fidèle est obligatoire
+        if (paiementCredit) {
+            if (!clientId) {
+                isValid = false;
+            }
+            if (montantCash < 0 || montantCash > total) {
+                isValid = false;
+            }
+        } else {
+            // Ventes normales: le nom du client est optionnel
             if (montantCash < 0 || montantCash > total) {
                 isValid = false;
             }
@@ -869,8 +913,10 @@ class PanierManager {
             }
         }
         
+        const clientId = document.getElementById('client_id')?.value || '';
         const formData = {
             nom_client: nomClient,
+            client_id: clientId || null,
             paiement_type: paiementType,
             montant_cash: montantCash,
             type_livraison: typeLivraison,

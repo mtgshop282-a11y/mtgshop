@@ -157,7 +157,10 @@
                                 <form id="finaliserForm">
                                     <div class="mb-3">
                                         <label for="nom_client" class="form-label fw-semibold">Nom du client</label>
-                                        <input type="text" class="form-control" id="nom_client" name="nom_client" required placeholder="Saisir le nom du client">
+                                        <input list="clientsList" type="text" class="form-control" id="nom_client" name="nom_client" required placeholder="Saisir le nom du client">
+                                        <input type="hidden" id="client_id" name="client_id" value="">
+                                        <datalist id="clientsList"></datalist>
+                                        <div class="form-text small">Sélectionnez un client fidèle si disponible ou saisissez un nouveau nom.</div>
                                     </div>
                                     
                                     <!-- Options de paiement avec tableau -->

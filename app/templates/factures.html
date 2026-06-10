@@ -8,15 +8,31 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h1 class="h4 mb-1 text-dark fw-bold">
-                <i class="fas fa-file-invoice me-2 text-primary"></i>Gestion des Factures
+                <i class="fas fa-file-invoice me-2 text-primary"></i>
+                {% if annulees_page %}Factures annulées{% else %}Gestion des Factures{% endif %}
             </h1>
-            <p class="text-muted small mb-0">Consultation, modification et gestion de l'historique des factures</p>
+            <p class="text-muted small mb-0">
+                {% if annulees_page %}
+                    Historique des factures annulées
+                {% else %}
+                    Consultation, modification et gestion de l'historique des factures
+                {% endif %}
+            </p>
         </div>
-        <div class="d-flex align-items-center">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
             <span class="badge bg-primary fs-6">
                 <i class="fas fa-receipt me-1"></i>
                 {{ factures|length }} facture(s)
             </span>
+            {% if not annulees_page %}
+            <a href="{{ url_for('routes.factures_annulees') }}" class="btn btn-outline-danger btn-sm">
+                <i class="fas fa-times-circle me-1"></i> Factures annulées
+            </a>
+            {% else %}
+            <a href="{{ url_for('routes.factures') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-file-invoice me-1"></i> Factures actives
+            </a>
+            {% endif %}
         </div>
     </div>
 
@@ -385,11 +401,18 @@
                                             title="Voir les détails">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                    {% if not annulees_page %}
+                                    <button class="btn btn-outline-danger cancel-open-details-btn"
+                                            data-facture-id="{{ facture.id }}"
+                                            title="Ouvrir le détail pour annuler">
+                                        <i class="fas fa-ban"></i>
+                                    </button>
                                     <button class="btn btn-outline-warning edit-facture-btn"
                                             data-facture-id="{{ facture.id }}"
                                             title="Modifier la facture">
                                         <i class="fas fa-edit"></i>
                                     </button>
+                                    {% endif %}
                                     <button class="btn btn-outline-secondary print-facture-btn"
                                             data-facture-id="{{ facture.id }}"
                                             title="Imprimer la facture">
@@ -509,6 +532,9 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
                     <i class="fas fa-times me-1"></i> Fermer
+                </button>
+                <button type="button" class="btn btn-danger d-none" id="cancelFactureBtn">
+                    <i class="fas fa-times-circle me-1"></i> Annuler la facture
                 </button>
                 <button type="button" class="btn btn-primary" id="printFromDetailsBtn">
                     <i class="fas fa-print me-1"></i> Imprimer
@@ -1225,6 +1251,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (exportCSVButton) exportCSVButton.addEventListener('click', exportToCSV);
     if (printButton) printButton.addEventListener('click', printTable);
 
+    // Confirmation d'annulation pour les factures
+    document.querySelectorAll('.annulment-form').forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            if (!confirm("Confirmez-vous l'annulation de cette facture ? Cette action est irréversible.")) {
+                event.preventDefault();
+            }
+        });
+    });
+
     // Écouteur pour supprimer les filtres individuels
     if (activeFilters) {
         activeFilters.addEventListener('click', function(e) {
@@ -1289,6 +1324,17 @@ document.addEventListener('DOMContentLoaded', function() {
             button.addEventListener('click', function() {
                 const factureId = this.getAttribute('data-facture-id');
                 chargerDetailsPourModification(factureId);
+            });
+        });
+    }
+
+    // Gestion du bouton d'ouverture du modal pour annulation
+    const cancelOpenButtons = document.querySelectorAll('.cancel-open-details-btn');
+    if (cancelOpenButtons) {
+        cancelOpenButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const factureId = this.getAttribute('data-facture-id');
+                chargerDetailsFacture(factureId);
             });
         });
     }
@@ -1376,6 +1422,14 @@ function afficherDetailsFacture(data) {
                                 <td class="text-end">${facture.date_facture}</td>
                             </tr>
                             <tr>
+                                <td class="fw-semibold">Statut:</td>
+                                <td class="text-end">
+                                    ${facture.annulee ?
+                                        '<span class="badge bg-danger"><i class="fas fa-times-circle me-1"></i>Annulée</span>' :
+                                        '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Active</span>'}
+                                </td>
+                            </tr>
+                            <tr>
                                 <td class="fw-semibold">Mode Paiement:</td>
                                 <td class="text-end">
                                     ${facture.paiement_credit ? 
@@ -1446,6 +1500,38 @@ function afficherDetailsFacture(data) {
 
     document.getElementById('factureDetailsContent').innerHTML = modalContent;
     
+    const cancelBtn = document.getElementById('cancelFactureBtn');
+    if (cancelBtn) {
+        if (facture.annulee) {
+            cancelBtn.classList.add('d-none');
+        } else if (facture.annulation_possible) {
+            cancelBtn.classList.remove('d-none');
+            cancelBtn.onclick = function() {
+                if (!confirm("Confirmez-vous l'annulation de cette facture ? Cette action est irréversible.")) {
+                    return;
+                }
+                fetch(`/factures/${facture.id}/annuler`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else {
+                        window.location.reload();
+                    }
+                }).catch(error => {
+                    console.error('Erreur lors de l\'annulation:', error);
+                    window.location.reload();
+                });
+            };
+        } else {
+            cancelBtn.classList.add('d-none');
+        }
+    }
+
     // Stocker l'ID de la facture pour l'impression
     document.getElementById('detailsFactureModal').setAttribute('data-current-facture-id', facture.id);
 }

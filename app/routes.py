@@ -7,8 +7,8 @@ from flask_login import login_user, logout_user, login_required, current_user
 from . import login_manager
 from PIL import Image
 from functools import wraps
-from sqlalchemy import func
-from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute, Paiements, LivraisonDepot  
+from sqlalchemy import func, or_
+from .models import db, Produits, Factures, Ventes, Benefices, Panier, TransactionsProduit, Depenses, TransactionDepot, Caisse, CompteBancaire, User, bcrypt, ProduitsEnRoute, Paiements, LivraisonDepot, Clients
 
 # Création du Blueprint
 bp = Blueprint('routes', __name__)
@@ -472,16 +472,29 @@ def api_finaliser_vente():
         data = request.get_json()
         
         nom_client = data.get('nom_client', '').strip()
+        client_id = data.get('client_id')
         paiement_type = data.get('paiement_type', 'comptant')
         montant_cash = float(data.get('montant_cash', 0))
         type_livraison = data.get('type_livraison', 'sur_place')
         lieu_retrait = data.get('lieu_retrait', 'magasin')
-        
-        if not nom_client:
-            return jsonify({
-                'success': False,
-                'message': 'Le nom du client est requis.'
-            }), 400
+
+        # Détecter si c'est une vente à crédit
+        paiement_credit_requested = (paiement_type == 'credit')
+
+        if client_id:
+            try:
+                client_id = int(client_id)
+                client = Clients.query.get(client_id)
+                if client:
+                    nom_client = client.nom.strip()
+                else:
+                    return jsonify({'success': False, 'message': 'Client fidèle introuvable.'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'message': 'Identifiant client invalide.'}), 400
+
+        # Pour les ventes à crédit, la sélection d'un client fidèle est obligatoire
+        if paiement_credit_requested and not client_id:
+            return jsonify({'success': False, 'message': "Pour une vente à crédit, la sélection d'un client fidèle est obligatoire."}), 400
         
         session_id = request.cookies.get('session_id')
         if not session_id:
@@ -517,6 +530,7 @@ def api_finaliser_vente():
         
         # ========== CRÉATION DE LA FACTURE ==========
         nouvelle_facture = Factures(
+            client_id=client_id,
             nom_client=nom_client,
             montant_total=montant_total,
             paiement_credit=paiement_credit,
@@ -700,16 +714,25 @@ def details_facture_json(id):
     facture = Factures.query.get_or_404(id)
     ventes = Ventes.query.filter_by(facture_id=id).all()
     
+    now = datetime.utcnow()
+    annulation_possible = False
+    if not facture.annulee and facture.date_facture:
+        elapsed = now - facture.date_facture
+        annulation_possible = elapsed.total_seconds() <= 4 * 3600
+
     facture_data = {
         'id': facture.id,
         'nom_client': facture.nom_client,
         'montant_total': float(facture.montant_total),
         'date_facture': facture.date_facture.strftime('%d/%m/%Y %H:%M'),
+        'date_facture_iso': facture.date_facture.isoformat(),
         'paiement_credit': facture.paiement_credit,
         'montant_cash': float(facture.montant_cash),
         'montant_credit': float(facture.montant_credit),
         'type_livraison': facture.type_livraison,
-        'lieu_retrait': facture.lieu_retrait
+        'lieu_retrait': facture.lieu_retrait,
+        'annulee': facture.annulee,
+        'annulation_possible': annulation_possible
     }
     
     ventes_data = []
@@ -726,6 +749,87 @@ def details_facture_json(id):
         'facture': facture_data,
         'ventes': ventes_data
     })
+
+
+@bp.route('/factures/<int:facture_id>/annuler', methods=['POST'])
+@login_required
+@permission_required('gestion_ventes')
+def annuler_facture(facture_id):
+    """Annule une facture et effectue les opérations inverses (restauration stock, suppression ventes/bénéfices, remboursement paiements, mise à jour livraison)."""
+    try:
+        facture = Factures.query.get_or_404(facture_id)
+
+        if facture.annulee:
+            flash(f"La facture #{facture_id} est déjà annulée.", "warning")
+            return redirect(url_for('routes.factures'))
+
+        # Vérifier la limite de 4 heures
+        if facture.date_facture:
+            elapsed_hours = (datetime.utcnow() - facture.date_facture).total_seconds() / 3600.0
+            if elapsed_hours > 4:
+                flash(f"La facture #{facture_id} ne peut plus être annulée après 4 heures.", "danger")
+                return redirect(url_for('routes.factures'))
+
+        # Démarrer une transaction
+        db.session.begin_nested()
+
+        # Récupérer les ventes liées
+        ventes = Ventes.query.filter_by(facture_id=facture_id).all()
+        vente_ids = [v.id for v in ventes]
+
+        # Restaurer le stock et supprimer les bénéfices
+        for vente in ventes:
+            produit = Produits.query.get_or_404(vente.produit_id)
+            if facture.type_livraison == 'sur_place':
+                produit.quantite += vente.quantite
+                transaction = TransactionsProduit(
+                    produit_id=produit.id,
+                    type='entree',
+                    quantite=vente.quantite,
+                    description=f"Annulation facture #{facture_id}"
+                )
+                db.session.add(transaction)
+            else:
+                produit.quantite_depot += vente.quantite
+                transaction_depot = TransactionDepot(
+                    produit_id=produit.id,
+                    type_transaction='entree',
+                    quantite=vente.quantite,
+                    description=f"Annulation facture #{facture_id}"
+                )
+                db.session.add(transaction_depot)
+
+        # Supprimer tous les bénéfices liés aux ventes
+        if vente_ids:
+            Benefices.query.filter(Benefices.vente_id.in_(vente_ids)).delete(synchronize_session=False)
+
+        # Supprimer les ventes
+        Ventes.query.filter_by(facture_id=facture_id).delete(synchronize_session=False)
+        paiements = Paiements.query.filter_by(facture_id=facture_id).all()
+        # Mettre à jour la livraison si nécessaire
+        livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
+        if livraison:
+            livraison.statut = 'annulee'
+            livraison.date_preparation = None
+            livraison.date_livree = None
+
+        # Marquer la facture annulée et remettre les montants à zéro
+        facture.annulee = True
+        facture.date_annulation = datetime.now()
+        facture.montant_cash = 0
+        facture.montant_credit = 0
+        facture.paiement_credit = False
+
+        db.session.commit()
+        flash(f"Facture #{facture_id} annulée et opérations inversées.", "success")
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERREUR annulation facture: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f"Erreur lors de l'annulation de la facture: {e}", "danger")
+
+    return redirect(url_for('routes.factures'))
 
 @bp.route('/factures/modifier', methods=['POST'])
 @login_required
@@ -940,27 +1044,186 @@ def modifier_facture():
 def factures_credit():
     search_term = request.args.get('search', '')
     
-    # IMPORTANT : Récupérer TOUTES les factures qui ont été en crédit
+    query = Factures.query.filter(
+        Factures.montant_credit > 0
+    )
     if search_term:
-        factures = Factures.query.filter(
-            Factures.a_ete_en_credit == True,
-            Factures.nom_client.ilike(f'%{search_term}%')
-        ).order_by(Factures.date_facture.desc()).all()
-    else:
-        factures = Factures.query.filter_by(
-            a_ete_en_credit=True
-        ).order_by(Factures.date_facture.desc()).all()
-    
-    # Calculer les totaux
+        query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
+
+    factures = query.order_by(Factures.nom_client.asc(), Factures.date_facture.asc()).all()
+
+    client_groups = {}
+    for facture in factures:
+        client = facture.client.nom.strip() if facture.client else facture.nom_client.strip()
+        client_id = facture.client.id if facture.client else None
+        group_key = f"client_{client_id}" if client_id is not None else f"name_{client.lower()}"
+        if group_key not in client_groups:
+            client_groups[group_key] = {
+                'client_id': client_id,
+                'client_name': client,
+                'invoices_count': 0,
+                'total_credit': 0.0,
+                'total_montant': 0.0,
+                'earliest_date': facture.date_facture,
+                'latest_date': facture.date_facture,
+                'factures': []
+            }
+        group = client_groups[group_key]
+        group['invoices_count'] += 1
+        group['total_credit'] += facture.montant_credit
+        group['total_montant'] += facture.montant_total
+        if facture.date_facture and facture.date_facture < group['earliest_date']:
+            group['earliest_date'] = facture.date_facture
+        if facture.date_facture and facture.date_facture > group['latest_date']:
+            group['latest_date'] = facture.date_facture
+        group['factures'].append(facture)
+
+    client_groups = sorted(client_groups.values(), key=lambda g: g['total_credit'], reverse=True)
     total_credit = sum(facture.montant_credit for facture in factures)
     total_factures = len(factures)
-    
+    total_clients = len(client_groups)
+
     return render_template('factures_credit.html', 
-                         factures=factures, 
+                         client_groups=client_groups,
+                         factures=factures,
                          search_term=search_term,
                          total_credit=total_credit,
                          total_factures=total_factures,
+                         total_clients=total_clients,
                          now=datetime.now())
+
+@bp.route('/paiement_client', methods=['POST'])
+@login_required
+@permission_required('gestion_ventes')
+def paiement_client():
+    try:
+        client_name = request.form['client_name'].strip()
+        client_id = request.form.get('client_id')
+        montant_paye = float(request.form['montant_paye'])
+        mode_paiement = request.form.get('mode_paiement', 'cash')
+        description = request.form.get('description', 'Paiement client')
+
+        if montant_paye <= 0:
+            flash("Le montant payé doit être supérieur à 0!", "danger")
+            return redirect(url_for('routes.factures_credit'))
+
+        if client_id:
+            try:
+                client_id = int(client_id)
+                factures = Factures.query.filter(
+                    Factures.montant_credit > 0,
+                    Factures.client_id == client_id
+                ).order_by(Factures.date_facture.asc()).all()
+            except ValueError:
+                factures = []
+        else:
+            factures = Factures.query.filter(
+                Factures.montant_credit > 0,
+                func.lower(func.trim(Factures.nom_client)) == client_name.lower()
+            ).order_by(Factures.date_facture.asc()).all()
+
+        if not factures:
+            flash(f"Aucune dette en crédit trouvée pour le client {client_name}.", "danger")
+            return redirect(url_for('routes.factures_credit'))
+
+        total_credit = sum(f.montant_credit for f in factures)
+        if montant_paye > total_credit:
+            flash("Le montant payé ne peut pas dépasser le total de la dette du client.", "danger")
+            return redirect(url_for('routes.factures_credit'))
+
+        montant_restant = montant_paye
+        created_payments = []
+        while montant_restant > 0 and factures:
+            facture = factures[0]
+            payement_sur_facture = min(facture.montant_credit, montant_restant)
+            nouveau_paiement = Paiements(
+                facture_id=facture.id,
+                montant=payement_sur_facture,
+                mode_paiement=mode_paiement,
+                description=f"{description} - paiement client {client_name}"
+            )
+            db.session.add(nouveau_paiement)
+            db.session.flush()
+            created_payments.append(nouveau_paiement.id)
+
+            facture.montant_cash += payement_sur_facture
+            facture.montant_credit -= payement_sur_facture
+            if facture.montant_credit <= 0:
+                facture.montant_credit = 0
+                facture.paiement_credit = False
+                factures.pop(0)
+            montant_restant -= payement_sur_facture
+
+        db.session.commit()
+        flash(f"Paiement client {client_name} de {montant_paye:.2f} $ appliqué sur les factures en crédit.", "success")
+
+        # Si un seul paiement a été créé, rediriger vers le reçu imprimable
+        if len(created_payments) == 1:
+            return redirect(url_for('routes.imprimer_recu_paiement', paiement_id=created_payments[0]))
+        else:
+            # Sinon, rediriger vers l'historique des paiements du client (si client connu)
+            if client_id:
+                return redirect(url_for('routes.historique_paiements_client', client_id=client_id))
+            else:
+                return redirect(url_for('routes.factures_credit'))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de l'enregistrement du paiement client: {e}", "danger")
+
+    return redirect(url_for('routes.factures_credit'))
+
+@bp.route('/api/clients', methods=['GET'])
+@login_required
+@permission_required('gestion_ventes')
+def api_clients():
+    clients = Clients.query.order_by(Clients.nom.asc()).all()
+    return jsonify({
+        'success': True,
+        'clients': [
+            {
+                'id': client.id,
+                'nom': client.nom,
+                'telephone': client.telephone,
+                'email': client.email,
+                'adresse': client.adresse
+            }
+            for client in clients
+        ]
+    })
+
+@bp.route('/gestion_clients', methods=['GET', 'POST'])
+@login_required
+@permission_required('gestion_ventes')
+def gestion_clients():
+    if request.method == 'POST':
+        nom = request.form.get('nom', '').strip()
+        telephone = request.form.get('telephone', '').strip()
+        email = request.form.get('email', '').strip()
+        adresse = request.form.get('adresse', '').strip()
+
+        if not nom:
+            flash('Le nom du client est requis.', 'danger')
+            return redirect(url_for('routes.gestion_clients'))
+
+        existing_client = Clients.query.filter(func.lower(Clients.nom) == nom.lower()).first()
+        if existing_client:
+            flash('Un client avec ce nom existe déjà.', 'warning')
+            return redirect(url_for('routes.gestion_clients'))
+
+        nouveau_client = Clients(
+            nom=nom,
+            telephone=telephone or None,
+            email=email or None,
+            adresse=adresse or None
+        )
+        db.session.add(nouveau_client)
+        db.session.commit()
+        flash('Client fidèle ajouté avec succès.', 'success')
+        return redirect(url_for('routes.gestion_clients'))
+
+    clients = Clients.query.order_by(Clients.nom.asc()).all()
+    return render_template('gestion_clients.html', clients=clients)
 
 @bp.route('/marquer_facture_payee', methods=['POST'])
 @login_required
@@ -995,6 +1258,8 @@ def marquer_facture_payee():
             description=description
         )
         db.session.add(nouveau_paiement)
+        db.session.flush()
+        paiement_id = nouveau_paiement.id
         
         # Mettre à jour les montants de la facture
         facture.montant_cash += montant_paye
@@ -1010,6 +1275,9 @@ def marquer_facture_payee():
         
         db.session.commit()
         
+        # Après commit, rediriger vers le reçu imprimable
+        return redirect(url_for('routes.imprimer_recu_paiement', paiement_id=paiement_id))
+    
     except Exception as e:
         db.session.rollback()
         flash(f"Erreur lors de l'enregistrement du paiement: {e}", "danger")
@@ -1021,8 +1289,24 @@ def marquer_facture_payee():
 @permission_required('gestion_ventes')
 def historique_paiements(facture_id):
     facture = Factures.query.get_or_404(facture_id)
-    paiements = Paiements.query.filter_by(facture_id=facture_id).order_by(Paiements.date_paiement.desc()).all()
+    paiements = Paiements.query.filter_by(facture_id=facture_id).order_by(Paiements.date_paiement.asc()).all()
     
+    # Calculer le solde restant après chaque paiement
+    solde = facture.montant_total
+    paiements_data = []
+    for paiement in paiements:
+        solde -= paiement.montant
+        paiements_data.append({
+            'id': paiement.id,
+            'montant': float(paiement.montant),
+            'date_paiement': paiement.date_paiement.strftime('%d/%m/%Y %H:%M'),
+            'mode_paiement': paiement.mode_paiement,
+            'description': paiement.description,
+            'solde': float(max(solde, 0))
+        })
+
+    # Retourner en ordre descendant pour l'affichage le plus récent en premier
+    paiements_data.reverse()
     return jsonify({
         'facture': {
             'id': facture.id,
@@ -1031,13 +1315,7 @@ def historique_paiements(facture_id):
             'montant_credit': float(facture.montant_credit),
             'montant_cash': float(facture.montant_cash)
         },
-        'paiements': [{
-            'id': p.id,
-            'montant': float(p.montant),
-            'date_paiement': p.date_paiement.strftime('%d/%m/%Y %H:%M'),
-            'mode_paiement': p.mode_paiement,
-            'description': p.description
-        } for p in paiements]
+        'paiements': paiements_data
     })
 
 @bp.route('/paiements/<int:paiement_id>/imprimer_recu')
@@ -1052,6 +1330,36 @@ def imprimer_recu_paiement(paiement_id):
                          paiement=paiement, 
                          facture=facture,
                          ventes=ventes)
+
+@bp.route('/paiements/client/<int:client_id>')
+@login_required
+@permission_required('gestion_ventes')
+def historique_paiements_client(client_id):
+    client = Clients.query.get_or_404(client_id)
+    # Récupérer toutes les factures liées au client
+    factures = Factures.query.filter_by(client_id=client_id).all()
+    facture_ids = [f.id for f in factures]
+    paiements = Paiements.query.filter(Paiements.facture_id.in_(facture_ids)).order_by(Paiements.date_paiement.asc()).all()
+
+    paiements_with_solde = []
+    solde_par_facture = {}
+    for paiement in paiements:
+        facture = paiement.facture
+        if facture.id not in solde_par_facture:
+            solde_par_facture[facture.id] = facture.montant_total
+        solde_par_facture[facture.id] -= paiement.montant
+        paiements_with_solde.append({
+            'id': paiement.id,
+            'montant': paiement.montant,
+            'date_paiement': paiement.date_paiement,
+            'mode_paiement': paiement.mode_paiement,
+            'description': paiement.description,
+            'facture_id': paiement.facture_id,
+            'solde': max(solde_par_facture[paiement.facture_id], 0)
+        })
+
+    paiements_with_solde.reverse()
+    return render_template('historique_paiements_client.html', client=client, paiements=paiements_with_solde)
 
 # ==================== ROUTES D'HISTORIQUE ====================
 
@@ -1116,18 +1424,11 @@ def historique_ventes():
 @login_required
 @permission_required('gestion_ventes')
 def factures():
-    """Page pour lister toutes les factures avec filtrage"""
-    # Récupérer les paramètres de recherche
+    """Page pour lister toutes les factures actives (non annulées) avec filtrage"""
     search_term = request.args.get('search', '').strip()
-    
-    # Construire la requête de base
-    query = Factures.query
-    
-    # Filtrer par nom client si un terme de recherche est fourni
+    query = Factures.query.filter_by(annulee=False)
     if search_term:
         query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
-    
-    # Trier par date (plus récent d'abord)
     factures_list = query.order_by(Factures.date_facture.desc()).all()
     
     # Calculer les statistiques
@@ -1184,7 +1485,68 @@ def factures():
                          total_montant=total_montant,
                          total_credit=total_credit,
                          total_comptant=total_comptant,
-                         stats=stats)
+                         stats=stats,
+                         annulees_page=False)
+
+@bp.route('/factures_annulees', methods=['GET'])
+@login_required
+@permission_required('gestion_ventes')
+def factures_annulees():
+    search_term = request.args.get('search', '').strip()
+    query = Factures.query.filter_by(annulee=True)
+    if search_term:
+        query = query.filter(Factures.nom_client.ilike(f'%{search_term}%'))
+
+    factures_list = query.order_by(Factures.date_facture.desc()).all()
+    total_factures = len(factures_list)
+    total_montant = sum(f.montant_total for f in factures_list)
+    total_credit = sum(f.montant_credit for f in factures_list if f.paiement_credit)
+    total_comptant = sum(f.montant_total for f in factures_list if not f.paiement_credit)
+
+    from datetime import datetime, timedelta
+    today = datetime.now().date()
+    factures_aujourdhui = Factures.query.filter(
+        Factures.annulee == True,
+        db.func.date(Factures.date_facture) == today
+    ).all()
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+    factures_semaine = Factures.query.filter(
+        Factures.annulee == True,
+        db.func.date(Factures.date_facture) >= start_of_week,
+        db.func.date(Factures.date_facture) <= end_of_week
+    ).all()
+    start_of_month = today.replace(day=1)
+    next_month = today.replace(day=28) + timedelta(days=4)
+    end_of_month = next_month - timedelta(days=next_month.day)
+    factures_mois = Factures.query.filter(
+        Factures.annulee == True,
+        db.func.date(Factures.date_facture) >= start_of_month,
+        db.func.date(Factures.date_facture) <= end_of_month
+    ).all()
+
+    stats = {
+        'ventes_ajd': len(factures_aujourdhui),
+        'total_ajd': sum(f.montant_total for f in factures_aujourdhui),
+        'ventes_semaine': len(factures_semaine),
+        'total_semaine': sum(f.montant_total for f in factures_semaine),
+        'ventes_mois': len(factures_mois),
+        'total_mois': sum(f.montant_total for f in factures_mois),
+        'total_toutes': total_montant
+    }
+
+    produits = Produits.query.order_by(Produits.nom.asc()).all()
+
+    return render_template('factures.html',
+                         factures=factures_list,
+                         produits=produits,
+                         search_term=search_term,
+                         total_factures=total_factures,
+                         total_montant=total_montant,
+                         total_credit=total_credit,
+                         total_comptant=total_comptant,
+                         stats=stats,
+                         annulees_page=True)
 # ==================== ROUTES DE DÉPENSES ====================
 
 @bp.route('/depenses_ordinaires')

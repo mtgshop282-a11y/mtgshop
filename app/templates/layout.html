@@ -528,6 +528,11 @@
                                 <span class="badge bg-danger ms-1">{{ factures_credit_count }}</span>
                             {% endif %}
                         </a>
+                        {% if current_user.has_permission('gestion_ventes') %}
+                        <a href="/gestion_clients" class="nav-link {% if request.endpoint == 'routes.gestion_clients' %}active{% endif %}">
+                            <i class="fas fa-user-friends"></i> <span>Clients Fidèles</span>
+                        </a>
+                        {% endif %}
                     {% endif %}
                 </div>
             {% endif %}

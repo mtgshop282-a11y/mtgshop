@@ -1,4 +1,5 @@
 import os
+import sqlite3
 from app import create_app, db, bcrypt
 from app.models import User
 
@@ -11,9 +12,24 @@ def init_db():
         if not os.path.exists(db_dir):
             os.makedirs(db_dir)
         
-        # Création de toutes les tables
+        # Création de toutes les tables (nouvelles tables uniquement)
         db.create_all()
-        
+
+        # S'assurer que la colonne client_id existe sur les tables déjà créées
+        db_file = os.path.join(db_dir, 'gestion_stock.sqlite')
+        conn = sqlite3.connect(db_file)
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(factures);")
+        existing_cols = [row[1] for row in cur.fetchall()]
+        if 'client_id' not in existing_cols:
+            cur.execute("ALTER TABLE factures ADD COLUMN client_id INTEGER;")
+        if 'annulee' not in existing_cols:
+            cur.execute("ALTER TABLE factures ADD COLUMN annulee INTEGER DEFAULT 0;")
+        if 'date_annulation' not in existing_cols:
+            cur.execute("ALTER TABLE factures ADD COLUMN date_annulation TEXT;")
+        conn.commit()
+        conn.close()
+
         # Vérification si l'administrateur existe déjà
         admin = User.query.filter_by(email='admin@gmail.com').first()
         if not admin:
