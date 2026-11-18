@@ -45,7 +45,7 @@ def init_db():
                            'gestion_banque', 'gestion_caise', 'gestion_depot', 
                            'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 
                            'voir_benefice', 'gestion_depenses_ordinaires', 
-                           'gestion_depenses_recurentes', 'voir_historique_vente', 
+                           'gestion_depenses_recurrentes', 'voir_historique_vente', 
                            'gestion_transactions_stock_boutique']
             )
             db.session.add(admin)

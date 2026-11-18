@@ -1,1 +1,28 @@
-app/_pycache_/
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Secrets / configuration locale
+.env
+db/.secret_key
+
+# Sauvegardes générées (contiennent toutes les données : ne jamais les publier)
+app/static/uploads/temp/
+*.db
+*.zip
+
+# Build PyInstaller / installateur
+build/
+dist/
+*.exe
+
+# Divers
+.vscode/
+.idea/
+*.log
+.DS_Store
+Thumbs.db

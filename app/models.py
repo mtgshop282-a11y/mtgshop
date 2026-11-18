@@ -23,10 +23,19 @@ class User(UserMixin, db.Model):
     def is_admin(self):
         return self.role == 'admin'
 
+    # Anciennes orthographes encore présentes dans les permissions enregistrées en base
+    PERMISSION_ALIASES = {
+        'gestion_depenses_recurrentes': {'gestion_depenses_recurentes'},
+    }
+
     def has_permission(self, permission):
         if self.is_admin():
             return True
-        return self.permissions and permission in self.permissions
+        if not self.permissions:
+            return False
+        if permission in self.permissions:
+            return True
+        return any(alias in self.permissions for alias in self.PERMISSION_ALIASES.get(permission, ()))
 
 class Produits(db.Model):
     __tablename__ = 'produits'

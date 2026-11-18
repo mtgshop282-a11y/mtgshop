@@ -1,0 +1,90 @@
+{% extends "layout.html" %}
+
+{% block title %}Suivi des livraisons{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-3 mt-md-5 px-2 px-md-3">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show mb-3" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h2 class="mb-0"><i class="fas fa-truck"></i> Suivi des livraisons en cours</h2>
+        {% if current_user.has_permission('gestion_depot') %}
+            <a href="{{ url_for('routes.gestion_livraisons') }}" class="btn btn-sm btn-outline-primary">
+                <i class="fas fa-warehouse me-1"></i> Gestion des livraisons
+            </a>
+        {% endif %}
+    </div>
+
+    <form method="GET" class="row g-2 mb-4">
+        <div class="col-12 col-md-6">
+            <input type="text" name="client" class="form-control" placeholder="Rechercher un client..." value="{{ nom_client }}">
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i> Rechercher</button>
+        </div>
+        {% if nom_client %}
+        <div class="col-auto">
+            <a href="{{ url_for('routes.livraisons_client') }}" class="btn btn-outline-secondary">Effacer</a>
+        </div>
+        {% endif %}
+    </form>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-list"></i> Livraisons non encore livrées</h5>
+            <span class="badge bg-primary">{{ livraisons|length }}</span>
+        </div>
+        <div class="card-body p-0">
+            {% if livraisons %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Facture</th>
+                            <th>Client</th>
+                            <th>Date commande</th>
+                            <th>Lieu de retrait</th>
+                            <th>Montant</th>
+                            <th>Statut</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for livraison in livraisons %}
+                        <tr>
+                            <td>
+                                <a href="{{ url_for('routes.details_facture', id=livraison.facture_id) }}" target="_blank">#{{ livraison.facture_id }}</a>
+                            </td>
+                            <td>{{ livraison.facture.nom_client if livraison.facture else '-' }}</td>
+                            <td>{{ livraison.date_commande.strftime('%d/%m/%Y %H:%M') if livraison.date_commande else '-' }}</td>
+                            <td>{{ (livraison.lieu_retrait or '-')|replace('_', ' ') }}</td>
+                            <td>{{ "%.2f"|format(livraison.facture.montant_total) if livraison.facture else '-' }} $</td>
+                            <td>
+                                {% if livraison.statut == 'en_attente' %}
+                                    <span class="badge bg-warning text-dark">En attente</span>
+                                {% elif livraison.statut == 'en_preparation' %}
+                                    <span class="badge bg-info text-dark">En préparation</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ livraison.statut }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted text-center my-4">Aucune livraison en cours{% if nom_client %} pour « {{ nom_client }} »{% endif %}.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

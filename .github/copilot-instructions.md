@@ -1,7 +1,7 @@
 # MTG Shop Management System - AI Agent Instructions
 
 ## Architecture Overview
-This is a Flask-based web application for managing a Magic: The Gathering card shop. The system handles inventory, sales, user management, and financial tracking with a role-based permission system.
+This is a Flask-based web application for managing a retail shop (stock magasin/dépôt, ventes, crédit, finances). The system handles inventory, sales, user management, and financial tracking with a role-based permission system.
 
 **Core Components:**
 - **User Management**: Admin/vendeur roles with granular permissions (JSON-stored in database)
@@ -97,5 +97,4 @@ fetch('/api/endpoint', {
 - **Credit system**: `montant_credit` tracking with payment history
 - **Delivery**: Depot-based with status tracking (`en_attente`, `prepare`, `livree`)
 
-When modifying code, maintain French language consistency and ensure permission checks are properly implemented for new features.</content>
-<parameter name="filePath">d:\Nouveau dossier\MES PROJET\mtgshop\.github\copilot-instructions.md
+When modifying code, maintain French language consistency and ensure permission checks are properly implemented for new features.
