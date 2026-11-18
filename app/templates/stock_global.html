@@ -18,8 +18,31 @@
         {% endif %}
     {% endwith %}
 
+    <!-- Indicateurs -->
+    <div class="row g-3 mb-4">
+        <div class="col-12 col-md-4">
+            <div class="card kpi kpi-1 h-100"><div class="card-body">
+                <i class="fas fa-coins"></i><small>Valeur totale du stock (prix d'achat)</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(cout_total_global).replace(',', ' ') }} $</div>
+                <div class="small mt-1">{{ produits_avec_cout|length }} produits</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card kpi kpi-3 h-100"><div class="card-body">
+                <i class="fas fa-store"></i><small>En magasin</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(cout_global_magasin).replace(',', ' ') }} $</div>
+            </div></div>
+        </div>
+        <div class="col-6 col-md-4">
+            <div class="card kpi kpi-2 h-100"><div class="card-body">
+                <i class="fas fa-warehouse"></i><small>Au dépôt</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(cout_global_depot).replace(',', ' ') }} $</div>
+            </div></div>
+        </div>
+    </div>
+
     <!-- Filtre de recherche et boutons d'action -->
-    <div class="card mt-4 shadow-sm border-0">
+    <div class="card shadow-sm border-0">
         <div class="card-header text-white" style="background-color: #2C3E50;">
             <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i> Filtres et Actions</h5>
         </div>
@@ -66,7 +89,7 @@
                 <table class="table table-striped table-hover" id="stockTable">
                     <thead class="table-light">
                         <tr>
-                            <th class="text-center"><i class="fas fa-box me-2"></i>Produit</th>
+                            <th><i class="fas fa-box me-2"></i>Produit</th>
                             <th class="text-center"><i class="fas fa-hashtag me-2"></i>Quantité en Magasin</th>
                             <th class="text-center"><i class="fas fa-hashtag me-2"></i>Quantité en Dépôt</th>
                             <th class="text-center"><i class="fas fa-money-bill-wave me-2"></i>Coût d'Achat Unitaire</th>
@@ -76,11 +99,11 @@
                     <tbody id="stockTableBody">
                         {% for produit in produits_avec_cout %}
                         <tr>
-                            <td class="text-center">{{ produit.produit.nom }}</td>
+                            <td class="fw-semibold">{{ produit.produit.nom }}</td>
                             <td class="text-center">{{ produit.produit.quantite }}</td>
                             <td class="text-center">{{ produit.produit.quantite_depot }}</td>
-                            <td class="text-center">{{ produit.produit.prix_achat|round(2) }} $</td>
-                            <td class="text-center">{{ produit.cout_total|round(2) }} $</td>
+                            <td class="text-center">{{ "%.2f"|format(produit.produit.prix_achat or 0) }} $</td>
+                            <td class="text-center">{{ "%.2f"|format(produit.cout_total or 0) }} $</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -88,36 +111,6 @@
             </div>
         </div>
     </div>
-
-    <div class="row">
-        <!-- Section pour le coût global total -->
-     <div class="card mt-4  shadow-sm border-0 col-md-6">
-        <div class="card-header text-white" style="background-color: #2980B9;">
-            <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global en Magasin</h5>
-        </div>
-        <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_global_magasin|round(2) }} $</h3>
-        </div>
-     </div>
-     <div class="card mt-4 shadow-sm border-0 col-md-6">
-        <div class="card-header text-white" style="background-color: #2980B9;">
-            <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global en Depot</h5>
-        </div>
-        <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_global_depot|round(2) }} $</h3>
-        </div>
-     </div>
-
-    </div>
-     <div class="card mt-4 shadow-sm border-0 ">
-        <div class="card-header text-white" style="background-color: #2980B9;">
-            <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global Total</h5>
-        </div>
-        <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_total_global|round(2) }} $</h3>
-        </div>
-    </div>
-    
 
     <!-- Graphique sur une ligne entière -->
     <div class="card mt-4 shadow-sm border-0">

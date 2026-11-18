@@ -43,36 +43,40 @@
     <!-- Statistiques simplifiées pour mobile -->
     <div class="row g-2 mb-3 mb-md-4">
         <div class="col-6 col-md-3">
-            <div class="card text-center h-100 border-start border-warning border-4">
-                <div class="card-body p-2 p-md-3">
-                    <div class="h4 fw-bold text-warning mb-1">{{ stats.en_attente }}</div>
-                    <p class="small text-muted mb-0">À livrer</p>
+            <a href="{{ url_for('routes.gestion_livraisons', statut='en_attente') }}" class="card kpi kpi-5 h-100 text-reset{{ ' shadow' if statut_filter == 'en_attente' }}">
+                <div class="card-body">
+                    <i class="fas fa-hourglass-half"></i>
+                    <small>À livrer</small>
+                    <div class="kpi-value">{{ stats.en_attente }}</div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card text-center h-100 border-start border-success border-4">
-                <div class="card-body p-2 p-md-3">
-                    <div class="h4 fw-bold text-success mb-1">{{ stats.livree }}</div>
-                    <p class="small text-muted mb-0">Livrées</p>
+            <a href="{{ url_for('routes.gestion_livraisons', statut='livree') }}" class="card kpi kpi-4 h-100 text-reset{{ ' shadow' if statut_filter == 'livree' }}">
+                <div class="card-body">
+                    <i class="fas fa-circle-check"></i>
+                    <small>Livrées</small>
+                    <div class="kpi-value">{{ stats.livree }}</div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card text-center h-100 border-start border-danger border-4">
-                <div class="card-body p-2 p-md-3">
-                    <div class="h4 fw-bold text-danger mb-1">{{ stats.annulee }}</div>
-                    <p class="small text-muted mb-0">Annulées</p>
+            <a href="{{ url_for('routes.gestion_livraisons', statut='annulee') }}" class="card kpi kpi-6 h-100 text-reset{{ ' shadow' if statut_filter == 'annulee' }}">
+                <div class="card-body">
+                    <i class="fas fa-ban"></i>
+                    <small>Annulées</small>
+                    <div class="kpi-value">{{ stats.annulee }}</div>
                 </div>
-            </div>
+            </a>
         </div>
         <div class="col-6 col-md-3">
-            <div class="card text-center h-100 border-start border-secondary border-4">
-                <div class="card-body p-2 p-md-3">
-                    <div class="h4 fw-bold text-secondary mb-1">{{ stats.tous }}</div>
-                    <p class="small text-muted mb-0">Total</p>
+            <a href="{{ url_for('routes.gestion_livraisons', statut='tous') }}" class="card kpi kpi-1 h-100 text-reset{{ ' shadow' if statut_filter == 'tous' }}">
+                <div class="card-body">
+                    <i class="fas fa-truck"></i>
+                    <small>Total</small>
+                    <div class="kpi-value">{{ stats.tous }}</div>
                 </div>
-            </div>
+            </a>
         </div>
     </div>
 

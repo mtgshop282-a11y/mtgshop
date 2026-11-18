@@ -1,0 +1,233 @@
+{#
+  Page de trésorerie partagée par la caisse et le compte bancaire.
+  Variables attendues (définies par la page qui inclut ce fichier) :
+    t_titre, t_icone, t_action, t_libelle_solde,
+    t_type_entree, t_label_entree, t_type_sortie, t_label_sortie, t_titre_impression
+  et, depuis la route : transactions, solde.
+#}
+{% set total_entrees = transactions|selectattr('type_transaction', 'equalto', t_type_entree)|sum(attribute='montant') %}
+{% set total_sorties = transactions|rejectattr('type_transaction', 'equalto', t_type_entree)|sum(attribute='montant') %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h2 class="mb-0"><i class="fas {{ t_icone }}"></i> {{ t_titre }}</h2>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-stack">
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+            </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+{% endwith %}
+
+<!-- Indicateurs -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">
+        <div class="card kpi {{ 'kpi-6' if solde < 0 else 'kpi-1' }} h-100">
+            <div class="card-body">
+                <i class="fas fa-wallet"></i>
+                <small>{{ t_libelle_solde }}</small>
+                <div class="kpi-value">{{ "%.2f"|format(solde) }} $</div>
+                <div class="small mt-1">{{ transactions|length }} opération{{ 's' if transactions|length > 1 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="card kpi kpi-4 h-100">
+            <div class="card-body">
+                <i class="fas fa-arrow-down"></i>
+                <small>Total {{ t_label_entree|lower }}s</small>
+                <div class="kpi-value text-success">+{{ "%.2f"|format(total_entrees) }} $</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-4">
+        <div class="card kpi kpi-6 h-100">
+            <div class="card-body">
+                <i class="fas fa-arrow-up"></i>
+                <small>Total {{ t_label_sortie|lower }}s</small>
+                <div class="kpi-value text-danger">−{{ "%.2f"|format(total_sorties) }} $</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Formulaire -->
+    <div class="col-12 col-lg-4">
+        <div class="card" style="position: sticky; top: 80px;">
+            <div class="card-header">
+                <h5><i class="fas fa-plus-circle me-2"></i>Nouvelle opération</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ t_action }}" method="POST" id="transactionForm">
+                    <label class="form-label">Type d'opération</label>
+                    <div class="btn-group w-100 mb-3" role="group" aria-label="Type d'opération">
+                        <input type="radio" class="btn-check" name="type_transaction" id="type_entree" value="{{ t_type_entree }}" checked>
+                        <label class="btn btn-outline-success" for="type_entree"><i class="fas fa-arrow-down me-1"></i> {{ t_label_entree }}</label>
+                        <input type="radio" class="btn-check" name="type_transaction" id="type_sortie" value="{{ t_type_sortie }}">
+                        <label class="btn btn-outline-danger" for="type_sortie"><i class="fas fa-arrow-up me-1"></i> {{ t_label_sortie }}</label>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="montant" class="form-label">Montant</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="montant" name="montant" min="0.01" step="0.01" placeholder="0.00" required>
+                            <span class="input-group-text">$</span>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="3" placeholder="Ex. : versement de la recette du jour"></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-check me-1"></i> Enregistrer l'opération
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Historique -->
+    <div class="col-12 col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <h5><i class="fas fa-list me-2"></i>Historique <span class="badge bg-secondary ms-1" id="compteurLignes">{{ transactions|length }}</span></h5>
+                <div class="d-flex gap-2">
+                    <button type="button" id="resetFilters" class="btn btn-sm btn-outline-secondary"><i class="fas fa-rotate-left me-1"></i> Réinitialiser</button>
+                    <button type="button" id="printButton" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Imprimer</button>
+                </div>
+            </div>
+            <div class="card-body border-bottom">
+                <div class="row g-2">
+                    <div class="col-12 col-md-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" id="searchTransaction" class="form-control" placeholder="Rechercher...">
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <input type="date" id="filterDateStart" class="form-control form-control-sm" aria-label="Date de début">
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <input type="date" id="filterDateEnd" class="form-control form-control-sm" aria-label="Date de fin">
+                    </div>
+                    <div class="col-12 col-md-2">
+                        <select id="filterType" class="form-select form-select-sm" aria-label="Type">
+                            <option value="">Tous</option>
+                            <option value="{{ t_type_entree }}">{{ t_label_entree }}s</option>
+                            <option value="{{ t_type_sortie }}">{{ t_label_sortie }}s</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Description</th>
+                            <th class="text-end">Montant</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionTableBody">
+                        {% for transaction in transactions %}
+                        {% set est_entree = transaction.type_transaction == t_type_entree %}
+                        <tr data-type="{{ transaction.type_transaction }}" data-date="{{ transaction.date_transaction.strftime('%Y-%m-%d') }}">
+                            <td class="text-nowrap">
+                                {{ transaction.date_transaction.strftime('%d/%m/%Y') }}
+                                <span class="text-muted small ms-1">{{ transaction.date_transaction.strftime('%H:%M') }}</span>
+                            </td>
+                            <td>
+                                {% if est_entree %}
+                                    <span class="badge bg-success"><i class="fas fa-arrow-down me-1"></i>{{ t_label_entree }}</span>
+                                {% else %}
+                                    <span class="badge bg-danger"><i class="fas fa-arrow-up me-1"></i>{{ t_label_sortie }}</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted">{{ transaction.description or '—' }}</td>
+                            <td class="text-end fw-semibold text-nowrap {{ 'text-success' if est_entree else 'text-danger' }}">
+                                {{ '+' if est_entree else '−' }}{{ "%.2f"|format(transaction.montant) }} $
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div id="noResults" class="empty-state" {% if transactions %}style="display: none;"{% endif %}>
+                <i class="fas fa-magnifying-glass d-block"></i>
+                {% if transactions %}Aucune opération ne correspond à vos filtres.{% else %}Aucune opération enregistrée pour le moment.{% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const recherche = document.getElementById('searchTransaction');
+    const debut = document.getElementById('filterDateStart');
+    const fin = document.getElementById('filterDateEnd');
+    const type = document.getElementById('filterType');
+    const corps = document.getElementById('transactionTableBody');
+    const aucun = document.getElementById('noResults');
+    const compteur = document.getElementById('compteurLignes');
+    const lignes = Array.from(corps.querySelectorAll('tr'));
+
+    function filtrer() {
+        const terme = recherche.value.toLowerCase();
+        let visibles = 0;
+        lignes.forEach(row => {
+            const date = row.dataset.date;
+            const ok = row.textContent.toLowerCase().includes(terme)
+                && (!debut.value || date >= debut.value)
+                && (!fin.value || date <= fin.value)
+                && (!type.value || row.dataset.type === type.value);
+            row.style.display = ok ? '' : 'none';
+            if (ok) visibles++;
+        });
+        compteur.textContent = visibles;
+        if (lignes.length) aucun.style.display = visibles ? 'none' : 'block';
+    }
+
+    [recherche].forEach(el => el.addEventListener('input', filtrer));
+    [debut, fin, type].forEach(el => el.addEventListener('change', filtrer));
+
+    document.getElementById('resetFilters').addEventListener('click', () => {
+        recherche.value = debut.value = fin.value = type.value = '';
+        filtrer();
+    });
+
+    const echapper = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    document.getElementById('printButton').addEventListener('click', () => {
+        const lignesVisibles = lignes.filter(r => r.style.display !== 'none').map(r => `
+            <tr>${Array.from(r.cells).map(c => `<td>${echapper(c.textContent.trim().replace(/\s+/g, ' '))}</td>`).join('')}</tr>`).join('');
+        const fenetre = window.open('', '', 'height=700,width=900');
+        fenetre.document.write(`
+            <html><head><title>{{ t_titre_impression }}</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 24px; color: #0f172a; }
+                h1 { font-size: 20px; margin: 0; } h2 { font-size: 15px; color: #475569; margin: 4px 0 16px; font-weight: normal; }
+                p { font-size: 12px; color: #64748b; margin: 2px 0; }
+                table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; }
+                th, td { border: 1px solid #e2e8f0; padding: 7px 9px; text-align: left; }
+                th { background: #f1f5f9; } td:last-child, th:last-child { text-align: right; }
+            </style></head><body>
+            <h1>MKM Shop</h1><h2>{{ t_titre_impression }}</h2>
+            <p>Période : ${debut.value || 'début'} → ${fin.value || 'aujourd\'hui'}</p>
+            <p>Imprimé le ${new Date().toLocaleString('fr-FR')}</p>
+            <table><thead><tr><th>Date</th><th>Type</th><th>Description</th><th>Montant</th></tr></thead>
+            <tbody>${lignesVisibles}</tbody></table></body></html>`);
+        fenetre.document.close();
+        fenetre.print();
+    });
+});
+</script>

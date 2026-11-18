@@ -1,10 +1,15 @@
 {% extends "layout.html" %}
 
-{% block title %}Produits en route{% endblock %}
+{% block title %}Produits en route - MKM Shop{% endblock %}
 
 {% block content %}
 <div class="container">
-    <h2 class="mb-4"><i class="fas fa-truck"></i> Produits en cours de route</h2>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h2 class="mb-0"><i class="fas fa-truck-fast"></i> Produits en route</h2>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ajouterModal">
+            <i class="fas fa-plus me-1"></i> Ajouter un produit en route
+        </button>
+    </div>
 
     <!-- Messages flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -18,12 +23,6 @@
         {% endif %}
     {% endwith %}
 
-    <!-- Bouton pour ouvrir la modale d'ajout -->
-    <div class="mb-4">
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#ajouterModal">
-            <i class="fas fa-plus-circle me-2"></i>Ajouter un produit en route
-        </button>
-    </div>
 
     <!-- Tableau des produits en route -->
     <div class="card shadow-sm border-0">
@@ -123,6 +122,15 @@
                     </tbody>
                 </table>
             </div>
+            {% if not produits %}
+            <div class="empty-state">
+                <i class="fas fa-truck-fast d-block"></i>
+                Aucune commande en route pour le moment.<br>
+                <button class="btn btn-sm btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#ajouterModal">
+                    <i class="fas fa-plus me-1"></i> Enregistrer une commande
+                </button>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>

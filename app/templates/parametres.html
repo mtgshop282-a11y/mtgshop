@@ -1,73 +1,97 @@
 {% extends "layout.html" %}
 
-{% block title %}Paramètres{% endblock %}
+{% block title %}Paramètres - MKM Shop{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h2 class="mb-4"><i class="fas fa-cogs"></i> Paramètres</h2>
+{% set libelles = {
+    'gestion_utilisateurs': 'Gérer les utilisateurs',
+    'gestion_produits': 'Gérer les produits',
+    'gestion_ventes': 'Gérer les ventes',
+    'gestion_banque': 'Compte bancaire',
+    'gestion_caise': 'Caisse',
+    'gestion_depot': 'Gérer le dépôt',
+    'voir_stock_depot': 'Voir le stock du dépôt',
+    'voir_stock_boutique': 'Voir le stock boutique',
+    'voir_stock_globale': 'Voir le stock global',
+    'voir_benefice': 'Voir les bénéfices',
+    'gestion_depenses_ordinaires': 'Dépenses ordinaires',
+    'gestion_depenses_recurrentes': 'Dépenses récurrentes',
+    'gestion_depenses_recurentes': 'Dépenses récurrentes',
+    'voir_historique_vente': 'Historique des ventes',
+    'gestion_transactions_stock_boutique': 'Mouvements du stock boutique',
+    'gestion_livraisons': 'Livraisons',
+} %}
 
-    <!-- Section Paramètres Généraux -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5><i class="fas fa-globe"></i> Paramètres Généraux</h5>
+<h2 class="mb-4"><i class="fas fa-gear"></i> Paramètres</h2>
+
+<div class="row g-4">
+    <div class="col-12 col-lg-6 d-flex flex-column gap-4">
+        <!-- Compte -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-user me-2"></i>Mon compte</h5>
+                <a href="{{ url_for('routes.profile') }}" class="btn btn-sm btn-outline-primary"><i class="fas fa-pen me-1"></i> Modifier</a>
+            </div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Nom</span><span class="fw-semibold">{{ current_user.firstname or '' }} {{ current_user.lastname or '' }}</span></li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Email</span><span class="fw-semibold">{{ current_user.email }}</span></li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Rôle</span><span class="badge bg-primary text-capitalize">{{ current_user.role }}</span></li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span class="text-muted">Mot de passe</span>
+                    <a href="{{ url_for('routes.profile') }}" class="small">Changer le mot de passe <i class="fas fa-chevron-right ms-1"></i></a>
+                </li>
+            </ul>
         </div>
-        <div class="card-body">
-            <form>
-                <div class="mb-3">
-                    <label for="theme">Thème</label>
-                    <select class="form-control" id="theme">
-                        <option value="light">Clair</option>
-                        <option value="dark">Sombre</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="language">Langue</label>
-                    <select class="form-control" id="language">
-                        <option value="fr">Français</option>
-                        <option value="en">Anglais</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
-            </form>
+
+        <!-- Permissions -->
+        <div class="card">
+            <div class="card-header"><h5><i class="fas fa-shield-alt me-2"></i>Mes accès</h5></div>
+            <div class="card-body">
+                {% if current_user.is_admin() %}
+                    <div class="alert alert-primary mb-0"><i class="fas fa-crown me-2"></i>Administrateur : vous avez accès à toutes les fonctions de l'application.</div>
+                {% elif current_user.permissions %}
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for p in current_user.permissions %}
+                            <span class="badge bg-secondary"><i class="fas fa-check me-1"></i>{{ libelles.get(p, p) }}</span>
+                        {% endfor %}
+                    </div>
+                    <p class="text-muted small mt-3 mb-0">Pour obtenir d'autres accès, contactez un administrateur.</p>
+                {% else %}
+                    <p class="text-muted mb-0">Aucune permission attribuée. Contactez un administrateur.</p>
+                {% endif %}
+            </div>
         </div>
     </div>
 
-    <!-- Section Paramètres Utilisateur -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5><i class="fas fa-user"></i> Paramètres Utilisateur</h5>
+    <div class="col-12 col-lg-6 d-flex flex-column gap-4">
+        {% if current_user.has_permission('gestion_utilisateurs') %}
+        <!-- Données -->
+        <div class="card">
+            <div class="card-header"><h5><i class="fas fa-database me-2"></i>Données</h5></div>
+            <div class="card-body">
+                <p class="mb-3">Téléchargez une copie complète de la base (fichier SQLite et export SQL) dans une archive ZIP. Faites-le régulièrement et conservez la copie en lieu sûr.</p>
+                <a href="{{ url_for('routes.telecharger_base_donnees') }}" class="btn btn-primary"><i class="fas fa-download me-1"></i> Télécharger une sauvegarde</a>
+            </div>
         </div>
-        <div class="card-body">
-            <form>
-                <div class="mb-3">
-                    <label for="email">Email</label>
-                    <input type="email" class="form-control" id="email" value="{{ current_user.email }}">
-                </div>
-                <div class="mb-3">
-                    <label for="password">Changer le mot de passe</label>
-                    <input type="password" class="form-control" id="password" placeholder="Nouveau mot de passe">
-                </div>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
-            </form>
-        </div>
-    </div>
 
-    <!-- Section Paramètres de Sécurité -->
-    <div class="card mt-4">
-        <div class="card-header">
-            <h5><i class="fas fa-shield-alt"></i> Sécurité</h5>
+        <div class="card">
+            <div class="card-header"><h5><i class="fas fa-users-gear me-2"></i>Utilisateurs</h5></div>
+            <div class="card-body">
+                <p class="mb-3">Ajoutez des comptes, attribuez des rôles et ajustez les permissions de chaque utilisateur.</p>
+                <a href="{{ url_for('routes.gestion_utilisateurs') }}" class="btn btn-outline-primary"><i class="fas fa-arrow-right me-1"></i> Gérer les utilisateurs</a>
+            </div>
         </div>
-        <div class="card-body">
-            <form>
-                <div class="mb-3">
-                    <label for="2fa">Authentification à deux facteurs</label>
-                    <select class="form-control" id="2fa">
-                        <option value="on">Activé</option>
-                        <option value="off">Désactivé</option>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-primary">Enregistrer</button>
-            </form>
+        {% endif %}
+
+        <!-- À propos -->
+        <div class="card">
+            <div class="card-header"><h5><i class="fas fa-circle-info me-2"></i>À propos</h5></div>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Application</span><span class="fw-semibold">MKM Shop — Gestion commerciale</span></li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Version</span><span class="fw-semibold">2.1</span></li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Langue</span><span class="fw-semibold">Français</span></li>
+                <li class="list-group-item d-flex justify-content-between"><span class="text-muted">Devise</span><span class="fw-semibold">Dollar ($)</span></li>
+            </ul>
         </div>
     </div>
 </div>

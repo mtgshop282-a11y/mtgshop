@@ -64,7 +64,7 @@
     --bs-light-rgb: 241, 245, 249;
     --bs-body-font-family: var(--mkm-font);
     --bs-body-color: var(--mkm-text);
-    --bs-body-bg: var(--mkm-bg);
+    --bs-body-bg: var(--mkm-surface);  /* fond des cartes, listes, modales ; la page garde --mkm-bg via body */
     --bs-border-color: var(--mkm-border);
     --bs-border-radius: var(--mkm-radius-sm);
     --bs-border-radius-lg: var(--mkm-radius);
@@ -395,6 +395,60 @@ a { text-decoration: none; }
 .card-body { padding: 1.15rem; }
 .card-footer { background: var(--mkm-surface-2); border-top: 1px solid var(--mkm-border); }
 
+/* ---------------------------------------------------------------------
+   En-têtes de cartes : chaque page avait sa couleur (inline, bg-*, dégradés).
+   Dans l'application, ils deviennent tous blancs ; la couleur d'origine ne
+   sert plus qu'à teinter l'icône et un fin liseré en haut de la carte.
+   --------------------------------------------------------------------- */
+.main-content .card > .card-header {
+    --hdr: var(--mkm-primary);
+    background: var(--mkm-surface) !important;
+    color: var(--mkm-text) !important;
+    border-bottom: 1px solid var(--mkm-border) !important;
+    padding: .85rem 1.15rem !important;
+}
+.main-content .card:has(> .card-header[class*="bg-"]),
+.main-content .card:has(> .card-header[style*="background"]) {
+    border-top: 3px solid var(--hdr-top, var(--mkm-primary));
+}
+.main-content .card > .card-header :is(h1, h2, h3, h4, h5, h6, span, small, div, label, strong) { color: inherit; }
+.main-content .card > .card-header .text-white,
+.main-content .card > .card-header .text-white-50,
+.main-content .card > .card-header.text-white { color: var(--mkm-text) !important; }
+.main-content .card > .card-header .text-white-50,
+.main-content .card > .card-header small.text-white { color: var(--mkm-muted) !important; }
+.main-content .card > .card-header i.fas,
+.main-content .card > .card-header i.far { color: var(--hdr); }
+.main-content .card > .card-header .btn i,
+.main-content .card > .card-header .badge i,
+.main-content .card > .card-header .input-group-text i { color: inherit; }
+
+/* Teinte d'accent selon la couleur d'origine */
+.main-content .card > .card-header:is(.bg-success, .bg-gradient-success, [style*="27AE60"], [style*="27ae60"], [style*="28a745"]) { --hdr: var(--mkm-success); }
+.main-content .card > .card-header:is(.bg-danger, .bg-gradient-danger, [style*="E74C3C"], [style*="e74c3c"], [style*="dc3545"]) { --hdr: var(--mkm-danger); }
+.main-content .card > .card-header:is(.bg-warning, .bg-gradient-warning, [style*="E67E22"], [style*="e67e22"], [style*="F39C12"], [style*="ffc107"]) { --hdr: var(--mkm-warning); }
+.main-content .card > .card-header:is(.bg-info, .bg-gradient-info, [style*="17a2b8"], [style*="0dcaf0"]) { --hdr: var(--mkm-info); }
+.main-content .card > .card-header:is(.bg-dark, .bg-secondary, [style*="2C3E50"], [style*="2c3e50"], [style*="34495E"]) { --hdr: #475569; }
+.main-content .card:has(> .card-header:is(.bg-success, .bg-gradient-success, [style*="27AE60"], [style*="27ae60"], [style*="28a745"])) { --hdr-top: var(--mkm-success); }
+.main-content .card:has(> .card-header:is(.bg-danger, .bg-gradient-danger, [style*="E74C3C"], [style*="dc3545"])) { --hdr-top: var(--mkm-danger); }
+.main-content .card:has(> .card-header:is(.bg-warning, .bg-gradient-warning, [style*="E67E22"], [style*="F39C12"], [style*="ffc107"])) { --hdr-top: #f59e0b; }
+.main-content .card:has(> .card-header:is(.bg-info, .bg-gradient-info, [style*="17a2b8"], [style*="0dcaf0"])) { --hdr-top: var(--mkm-info); }
+.main-content .card:has(> .card-header:is(.bg-dark, .bg-secondary, [style*="2C3E50"], [style*="2c3e50"], [style*="34495E"])) { --hdr-top: #94a3b8; }
+
+/* Boutons « clairs » prévus pour un fond coloré : lisibles sur fond blanc */
+.main-content .card > .card-header .btn-light,
+.main-content .card > .card-header .btn-outline-light {
+    --bs-btn-bg: #fff; --bs-btn-color: var(--mkm-text-2); --bs-btn-border-color: var(--mkm-border);
+    --bs-btn-hover-bg: var(--mkm-surface-2); --bs-btn-hover-color: var(--mkm-text); --bs-btn-hover-border-color: #cbd5e1;
+    --bs-btn-active-bg: #e2e8f0; --bs-btn-active-color: var(--mkm-text);
+}
+.main-content .card > .card-header .badge.bg-light,
+.main-content .card > .card-header .badge.bg-white { background: var(--mkm-primary-soft) !important; color: var(--mkm-primary) !important; }
+
+/* Corps de carte coloré en inline (ancien fond gris) : surface neutre */
+.main-content .card-body[style*="background-color: #F8F9FA"],
+.main-content .card-body[style*="background-color: #f8f9fa"] { background: var(--mkm-surface) !important; }
+
 /* En-têtes colorés utilisés dans les pages : version unifiée */
 .bg-gradient-primary { background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important; }
 .bg-gradient-success { background: linear-gradient(135deg, #059669 0%, #0d9488 100%) !important; }
@@ -433,6 +487,8 @@ a { text-decoration: none; }
 .kpi h3, .kpi h4, .kpi .kpi-value { font-size: 1.5rem; font-weight: 700; margin: 0; color: var(--mkm-text) !important; }
 .kpi small, .kpi .kpi-label { display: block; color: var(--mkm-muted) !important; font-size: .8rem; font-weight: 500; }
 .kpi .small, .kpi .mt-2 { color: var(--mkm-text-2) !important; }
+.kpi .card-body.text-center { text-align: left !important; }
+.kpi h6, .kpi .card-title { font-size: .8rem; font-weight: 500; color: var(--mkm-muted) !important; margin-bottom: .25rem !important; }
 .kpi .text-white, .kpi .text-white-50 { color: inherit !important; }
 .kpi h3, .kpi h4, .kpi .kpi-value { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 575.98px) {
@@ -644,7 +700,7 @@ hr { border-color: var(--mkm-border); opacity: 1; }
 
 /* État vide */
 .empty-state { text-align: center; padding: 2.5rem 1rem; color: var(--mkm-muted); }
-.empty-state i { font-size: 2rem; margin-bottom: .75rem; color: #cbd5e1; }
+.empty-state > i { font-size: 2rem; margin-bottom: .75rem; color: #cbd5e1; }
 
 /* ------------------------------------------------------ Tableau de bord */
 .welcome {
@@ -777,3 +833,7 @@ hr { border-color: var(--mkm-border); opacity: 1; }
     body { background: #fff; }
     .card { box-shadow: none; }
 }
+
+/* Carte chiffre clé servant de filtre : état sélectionné */
+a.kpi { cursor: pointer; }
+.kpi.shadow { box-shadow: 0 0 0 2px var(--kpi-color, var(--mkm-primary)), var(--mkm-shadow) !important; }
