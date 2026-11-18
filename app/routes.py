@@ -91,9 +91,40 @@ def inject_common_variables():
 @bp.route('/')
 @login_required
 def index():
-    total_produits = Produits.query.count()
+    """Tableau de bord : indicateurs adaptés aux permissions de l'utilisateur."""
+    non_annulee = or_(Factures.annulee == False, Factures.annulee.is_(None))
+    debut_jour = datetime.combine(datetime.now().date(), datetime.min.time())
+    debut_mois = debut_jour.replace(day=1)
+    SEUIL_STOCK_BAS = 5
+
+    dashboard = {'total_produits': Produits.query.count()}
+
+    if current_user.has_permission('voir_historique_vente') or current_user.has_permission('gestion_ventes'):
+        def _ventes_depuis(debut):
+            nb, total = db.session.query(func.count(Factures.id), func.coalesce(func.sum(Factures.montant_total), 0)) \
+                .filter(non_annulee, Factures.date_facture >= debut).one()
+            return nb, float(total or 0)
+        dashboard['ventes_jour'], dashboard['ca_jour'] = _ventes_depuis(debut_jour)
+        dashboard['ventes_mois'], dashboard['ca_mois'] = _ventes_depuis(debut_mois)
+        credit = db.session.query(func.coalesce(func.sum(Factures.montant_credit), 0), func.count(Factures.id)) \
+            .filter(non_annulee, Factures.montant_credit > 0).one()
+        dashboard['credit_total'], dashboard['credit_factures'] = float(credit[0] or 0), credit[1]
+        dashboard['dernieres_factures'] = Factures.query.filter(non_annulee) \
+            .order_by(Factures.date_facture.desc()).limit(6).all()
+
+    if current_user.has_permission('voir_stock_boutique') or current_user.has_permission('gestion_produits'):
+        dashboard['stock_bas'] = Produits.query.filter(Produits.quantite <= SEUIL_STOCK_BAS) \
+            .order_by(Produits.quantite.asc(), Produits.nom.asc()).limit(6).all()
+        dashboard['stock_bas_count'] = Produits.query.filter(Produits.quantite <= SEUIL_STOCK_BAS).count()
+        dashboard['seuil_stock_bas'] = SEUIL_STOCK_BAS
+
+    if current_user.has_permission('gestion_depot'):
+        dashboard['livraisons_attente'] = LivraisonDepot.query \
+            .filter(LivraisonDepot.statut.in_(['en_attente', 'en_preparation'])).count()
+
     transactions = TransactionsProduit.query.order_by(TransactionsProduit.date_transaction.desc()).limit(5).all()
-    return render_template('index.html', total_produits=total_produits, transactions=transactions)
+    return render_template('index.html', d=dashboard, transactions=transactions,
+                           total_produits=dashboard['total_produits'])
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():

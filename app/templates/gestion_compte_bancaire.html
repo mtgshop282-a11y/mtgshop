@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mt-5 text-center"><i class="fas fa-piggy-bank"></i> Gestion du Compte Bancaire</h1>
+    <h2 class="mb-4"><i class="fas fa-piggy-bank"></i> Gestion du Compte Bancaire</h2>
 
     <!-- Afficher les messages flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -19,12 +19,11 @@
     {% endwith %}
 
     <!-- Section pour le solde actuel -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2980B9;">
-            <h5 class="card-title mb-0"><i class="fas fa-wallet"></i> Solde Actuel</h5>
-        </div>
-        <div class="card-body text-center">
-            <h3 class="text-success">{{ solde|round(2) }} €</h3>
+    <div class="card kpi kpi-4 mb-4" style="max-width: 420px;">
+        <div class="card-body">
+            <i class="fas fa-wallet"></i>
+            <small>Solde du compte bancaire</small>
+            <div class="kpi-value {{ 'text-danger' if solde < 0 }}">{{ "%.2f"|format(solde) }} $</div>
         </div>
     </div>
 
@@ -134,7 +133,7 @@
                                     <span class="badge" style="background-color: #E74C3C;"><i class="fas fa-arrow-up me-2"></i>Retrait</span>
                                 {% endif %}
                             </td>
-                            <td class="text-center">{{ transaction.montant|round(2) }} €</td>
+                            <td class="text-center">{{ "%.2f"|format(transaction.montant) }} $</td>
                             <td class="text-center">{{ transaction.description }}</td>
                         </tr>
                         {% endfor %}

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="container">
-    <h1 class="mt-5 text-center"><i class="fas fa-boxes"></i> Stock Global</h1>
+    <h2 class="mb-4"><i class="fas fa-boxes"></i> Stock Global</h2>
 
     <!-- Afficher les messages flash -->
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -79,8 +79,8 @@
                             <td class="text-center">{{ produit.produit.nom }}</td>
                             <td class="text-center">{{ produit.produit.quantite }}</td>
                             <td class="text-center">{{ produit.produit.quantite_depot }}</td>
-                            <td class="text-center">{{ produit.produit.prix_achat|round(2) }} €</td>
-                            <td class="text-center">{{ produit.cout_total|round(2) }} €</td>
+                            <td class="text-center">{{ produit.produit.prix_achat|round(2) }} $</td>
+                            <td class="text-center">{{ produit.cout_total|round(2) }} $</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -96,7 +96,7 @@
             <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global en Magasin</h5>
         </div>
         <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_global_magasin|round(2) }} €</h3>
+            <h3 class="text-success">{{ cout_global_magasin|round(2) }} $</h3>
         </div>
      </div>
      <div class="card mt-4 shadow-sm border-0 col-md-6">
@@ -104,7 +104,7 @@
             <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global en Depot</h5>
         </div>
         <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_global_depot|round(2) }} €</h3>
+            <h3 class="text-success">{{ cout_global_depot|round(2) }} $</h3>
         </div>
      </div>
 
@@ -114,7 +114,7 @@
             <h5 class="card-title mb-0"><i class="fas fa-coins me-2"></i> Coût Global Total</h5>
         </div>
         <div class="card-body text-center">
-            <h3 class="text-success">{{ cout_total_global|round(2) }} €</h3>
+            <h3 class="text-success">{{ cout_total_global|round(2) }} $</h3>
         </div>
     </div>
     
@@ -215,7 +215,7 @@
                 const cells = row.querySelectorAll('td');
                 totalMagasin += parseFloat(cells[1].textContent) || 0;
                 totalDepot += parseFloat(cells[2].textContent) || 0;
-                totalCout += parseFloat(cells[4].textContent.replace(' €', '')) || 0;
+                totalCout += parseFloat(cells[4].textContent.replace(' $', '')) || 0;
             });
 
             const printContents = `
@@ -272,20 +272,20 @@
                                 <td>${totalMagasin}</td>
                                 <td>${totalDepot}</td>
                                 <td>-</td>
-                                <td>${totalCout.toFixed(2)} €</td>
+                                <td>${totalCout.toFixed(2)} $</td>
                             </tr>
                         </tbody>
                     </table>
                     
                     <div class="total-section">
                         <div class="grand-total">
-                            Coût Global en Magasin: {{ cout_global_magasin|round(2) }} €
+                            Coût Global en Magasin: {{ cout_global_magasin|round(2) }} $
                         </div>
                         <div class="grand-total">
-                            Coût Global en Dépôt: {{ cout_global_depot|round(2) }} €
+                            Coût Global en Dépôt: {{ cout_global_depot|round(2) }} $
                         </div>
                         <div class="grand-total" style="background-color: #d4edda; color: #155724;">
-                            Coût Global Total: {{ cout_total_global|round(2) }} €
+                            Coût Global Total: {{ cout_total_global|round(2) }} $
                         </div>
                     </div>
                     
@@ -317,10 +317,10 @@
                 let aValue = a.cells[columnIndex].textContent;
                 let bValue = b.cells[columnIndex].textContent;
                 
-                // Nettoyer les valeurs numériques (supprimer le symbole €)
+                // Nettoyer les valeurs numériques (supprimer le symbole $)
                 if (isNumeric) {
-                    aValue = parseFloat(aValue.replace(' €', ''));
-                    bValue = parseFloat(bValue.replace(' €', ''));
+                    aValue = parseFloat(aValue.replace(' $', ''));
+                    bValue = parseFloat(bValue.replace(' $', ''));
                     return ascending ? aValue - bValue : bValue - aValue;
                 } else {
                     return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
@@ -403,7 +403,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `${context.label}: ${context.raw.toFixed(2)} €`;
+                                    return `${context.label}: ${context.raw.toFixed(2)} $`;
                                 }
                             }
                         }

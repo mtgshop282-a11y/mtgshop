@@ -3,906 +3,388 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
     <title>{% block title %}Gestion MKM{% endblock %}</title>
-    
-    <!-- Bootstrap 5 CSS (local) -->
+    <link rel="icon" href="{{ url_for('static', filename='uploads/logo.png') }}">
+
+    <!-- Bootstrap 5 et Font Awesome (locaux) -->
     <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
-    
-    <!-- Font Awesome (local) -->
     <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
-    
-    <!-- Google Fonts (Roboto) -->
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Police Inter (si Internet est indisponible, la police système prend le relais) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Thème global de l'application -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
-    
-    <!-- Custom CSS -->
-    <style>
-        /* Votre CSS personnalisé reste inchangé */
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f8f9fa;
-            min-height: 100vh;
-            padding-top: 0;
-            margin: 0;
-        }
 
-        /* Sidebar */
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 250px;
-            height: 100%;
-            background: linear-gradient(180deg, #2c3e50 0%, #3498db 100%);
-            color: white;
-            padding: 20px 0;
-            z-index: 1000;
-            overflow-y: auto;
-            transform: translateX(-250px);
-            transition: transform 0.3s ease;
-        }
-
-        .sidebar.open {
-            transform: translateX(0);
-        }
-
-        .close-menu {
-            position: absolute;
-            top: 10px;
-            right: 15px;
-            font-size: 24px;
-            cursor: pointer;
-            display: none;
-        }
-
-        .sidebar h2 {
-            color: white;
-            padding: 0 20px;
-            margin-bottom: 30px;
-            font-size: 1.5rem;
-            border-bottom: 2px solid rgba(255,255,255,0.1);
-            padding-bottom: 15px;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            transition: all 0.3s;
-            border-left: 3px solid transparent;
-            cursor: pointer;
-        }
-
-        .nav-link:hover {
-            background: rgba(255,255,255,0.1);
-            color: white;
-            border-left: 3px solid #3498db;
-        }
-
-        .nav-link.active {
-            background: rgba(255,255,255,0.15);
-            color: white;
-            border-left: 3px solid #2ecc71;
-        }
-
-        .nav-link i {
-            width: 25px;
-            font-size: 18px;
-            margin-right: 10px;
-        }
-
-        .nav-dropdown {
-            display: none;
-            background: rgba(0,0,0,0.2);
-            padding-left: 20px;
-        }
-
-        .nav-dropdown.open {
-            display: block;
-        }
-
-        .dropdown-toggle::after {
-            content: '\f078';
-            font-family: 'Font Awesome 5 Free';
-            font-weight: 900;
-            border: none;
-            margin-left: auto;
-            transition: transform 0.3s;
-        }
-
-        .dropdown-toggle.active::after {
-            transform: rotate(180deg);
-        }
-
-        .logo-container {
-            text-align: center;
-            margin-bottom: 30px;
-            padding: 0 20px;
-        }
-
-        .logo-container img {
-            width: 80px;
-            height: 80px;
-            border-radius: 50%;
-            object-fit: cover;
-            border: 3px solid rgba(255,255,255,0.2);
-        }
-
-        /* Content */
-        .content {
-            margin-left: 0;
-            transition: margin-left 0.3s;
-            min-height: 100vh;
-        }
-
-        .sidebar.open + .content {
-            margin-left: 250px;
-        }
-
-        /* Header */
-        .header {
-            background: white;
-            padding: 15px 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 999;
-        }
-
-        .menu-toggle {
-            font-size: 24px;
-            cursor: pointer;
-            color: #2c3e50;
-            display: block;
-        }
-
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 999;
-        }
-
-        /* Dropdown profile */
-        .dropdown-toggle {
-            background: none;
-            border: 1px solid #dee2e6;
-            padding: 8px 15px;
-            border-radius: 50px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .dropdown-toggle img {
-            width: 35px;
-            height: 35px;
-        }
-
-        .dropdown-menu {
-            border: none;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            border-radius: 10px;
-            padding: 10px;
-            min-width: 200px;
-        }
-
-        .dropdown-menu .logo-container {
-            text-align: center;
-            padding: 10px;
-        }
-
-        .dropdown-menu .logo-container img {
-            width: 60px;
-            height: 60px;
-        }
-
-        /* Badge pour notifications */
-        .badge {
-            font-size: 0.7em;
-            padding: 0.25em 0.6em;
-            min-width: 20px;
-        }
-
-        /* Responsive */
-        @media (min-width: 992px) {
-            .sidebar {
-                transform: translateX(0);
-            }
-            
-            .content {
-                margin-left: 250px;
-            }
-            
-            .menu-toggle {
-                display: none;
-            }
-            
-            .close-menu {
-                display: none;
-            }
-            
-            .sidebar-overlay {
-                display: none !important;
-            }
-        }
-
-        @media (max-width: 991px) {
-            .close-menu {
-                display: block;
-            }
-            
-            /* Amélioration pour mobile */
-            .nav-link {
-                padding: 15px 20px;
-            }
-            
-            .nav-dropdown {
-                padding-left: 30px;
-            }
-        }
-
-        /* Animation pour les dropdowns */
-        .nav-dropdown {
-            animation: fadeIn 0.3s;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Style pour les notifications de crédit */
-        .nav-link .badge {
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-        /* Styles pour les notifications AJAX (à ajouter) */
-        #notifications-container {
-            z-index: 9999;
-            max-width: 350px;
-        }
-
-        .toast-notification {
-            position: relative;
-            padding: 1rem;
-            margin-bottom: 0.5rem;
-            border-radius: 0.375rem;
-            animation: slideIn 0.3s ease-out;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-
-        .toast-success {
-            background-color: #d1e7dd;
-            border: 1px solid #a3cfbb;
-            color: #0f5132;
-        }
-
-        .toast-error {
-            background-color: #f8d7da;
-            border: 1px solid #f1aeb5;
-            color: #842029;
-        }
-
-        .toast-warning {
-            background-color: #fff3cd;
-            border: 1px solid #ffecb5;
-            color: #664d03;
-        }
-
-        .toast-info {
-            background-color: #cff4fc;
-            border: 1px solid #9eeaf9;
-            color: #055160;
-        }
-
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-
-        /* Style pour les modales AJAX */
-        .modal-ajax .modal-dialog {
-            max-width: 90%;
-        }
-
-        @media (min-width: 768px) {
-            .modal-ajax .modal-dialog {
-                max-width: 800px;
-            }
-        }
-
-        /* Style pour les animations de panier */
-        .item-added {
-            animation: itemAdded 0.5s ease-out;
-        }
-
-        .item-removed {
-            animation: itemRemoved 0.5s ease-out;
-        }
-
-        @keyframes itemAdded {
-            0% { transform: scale(1); background-color: inherit; }
-            50% { transform: scale(1.05); background-color: #d1ecf1; }
-            100% { transform: scale(1); background-color: inherit; }
-        }
-
-        @keyframes itemRemoved {
-            0% { transform: translateX(0); opacity: 1; }
-            100% { transform: translateX(100%); opacity: 0; }
-        }
-
-        /* Style pour les factures thermiques */
-        .thermal-receipt {
-            width: 80mm;
-            min-height: 100mm;
-            margin: 0 auto;
-            padding: 5mm;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            line-height: 1.2;
-            background: white;
-            border: 1px solid #ccc;
-        }
-
-        /* Optimisation pour les pages AJAX */
-        .content-ajax {
-            transition: opacity 0.3s;
-        }
-
-        .loading-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(255, 255, 255, 0.8);
-            z-index: 9998;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .loading-overlay.active {
-            display: flex;
-        }
-    </style>
-    
-    <!-- Styles supplémentaires pour la page des ventes AJAX -->
     {% if request.endpoint == 'routes.ventes' %}
     <style>
-        /* Styles spécifiques pour la page ventes AJAX */
-        #panier-container {
-            transition: all 0.3s ease;
-        }
-        
-        #finalisation-section {
-            transition: all 0.3s ease;
-        }
-        
-        .panier-item {
-            transition: all 0.3s ease;
-        }
-        
-        .panier-item:hover {
-            background-color: #f8f9fa;
-            transform: translateX(2px);
-        }
-        
-        .btn-action {
-            transition: all 0.2s ease;
-        }
-        
-        .btn-action:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.3s ease-in-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        /* Style pour la facture dans la modale */
-        #facture-content {
-            max-height: 70vh;
-            overflow-y: auto;
-        }
-        
-        /* Style pour la recherche de produits */
-        #produitListModal {
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .produit-item {
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        
-        .produit-item:hover {
-            background-color: #f8f9fa;
-            transform: translateX(3px);
-        }
+        #panier-container, #finalisation-section, .panier-item { transition: all .2s ease; }
+        .panier-item:hover { background-color: var(--mkm-surface-2); }
+        .btn-action:hover { transform: translateY(-1px); box-shadow: var(--mkm-shadow-lg); }
+        .fade-in { animation: mkmFade .25s ease-in-out; }
+        #facture-content { max-height: 70vh; overflow-y: auto; }
+        #produitListModal { max-height: 400px; overflow-y: auto; }
+        .produit-item { cursor: pointer; transition: background-color .15s; }
+        .produit-item:hover { background-color: var(--mkm-primary-soft); }
     </style>
     {% endif %}
 </head>
 <body>
+    {% set ep = request.endpoint or '' %}
+    {% set photo_profil = url_for('static', filename=current_user.photo if current_user.is_authenticated and current_user.photo else 'uploads/default.png') %}
+
+    {# Macro : lien de navigation #}
+    {% macro nav_item(endpoint, href, icon, label, badge=None) -%}
+        <a href="{{ href }}" class="nav-link {% if request.endpoint == endpoint %}active{% endif %}">
+            <i class="fas {{ icon }}"></i><span>{{ label }}</span>
+            {% if badge %}<span class="badge bg-danger rounded-pill">{{ badge }}</span>{% endif %}
+        </a>
+    {%- endmacro %}
+
     <!-- Overlay de chargement pour AJAX -->
     <div class="loading-overlay" id="loading-overlay">
         <div class="text-center">
-            <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;" role="status">
+            <div class="spinner-border text-primary" style="width: 2.75rem; height: 2.75rem;" role="status">
                 <span class="visually-hidden">Chargement...</span>
             </div>
-            <p class="mt-3">Chargement en cours...</p>
+            <p class="mt-3 text-muted">Chargement en cours...</p>
         </div>
     </div>
 
-    <!-- Sidebar -->
-    <div class="sidebar" id="sidebar">
-        <div class="close-menu" id="close-menu">
-            <i class="fas fa-times"></i>
+    <!-- ===================== Barre latérale ===================== -->
+    <aside class="sidebar" id="sidebar" aria-label="Navigation principale">
+        <div class="sidebar-brand">
+            <img src="{{ url_for('static', filename='uploads/logo.png') }}" alt="Logo MKM">
+            <div>
+                <div class="brand-name">MKM Shop</div>
+                <div class="brand-sub">Gestion commerciale</div>
+            </div>
+            <span class="close-menu" id="close-menu" role="button" aria-label="Fermer le menu"><i class="fas fa-times"></i></span>
         </div>
-        <h2 style="text-align: center;">Menu</h2>
 
-        <!-- Logo -->
-        <div class="logo-container" style="text-align: center; margin-top: 20px;">
-            <img src="{{ url_for('static', filename='uploads/logo.png') }}" alt="Logo" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover;">
-        </div>
+        <nav class="sidebar-nav">
+            {{ nav_item('routes.index', '/', 'fa-gauge-high', 'Tableau de bord') }}
 
-        <!-- Liens de la barre latérale -->
-        <a href="/" class="nav-link {% if request.endpoint == 'routes.index' %}active{% endif %}">
-            <i class="fas fa-home"></i> <span>Accueil</span>
-        </a>
+            {% if current_user.is_authenticated %}
 
-        <!-- Contenu de la barre latérale -->
-        {% if current_user.is_authenticated %}
-            <!-- Produits -->
-            {% if current_user.has_permission('gestion_produits') or current_user.has_permission('voir_stock_boutique') or current_user.has_permission('voir_stock_globale') %}
-                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-produits">
-                    <i class="fas fa-cubes"></i> <span>Produits</span>
-                </a>
-                <div class="nav-dropdown" id="nav-dropdown-produits">
-                    {% if current_user.has_permission('gestion_produits') %}
-                        <a href="/gestion_produits" class="nav-link {% if request.endpoint == 'routes.gestion_produits' %}active{% endif %}">
-                            <i class="fas fa-edit"></i> <span>Gérer Produits</span>
-                        </a>
-                        <a href="/entrees_sorties" class="nav-link {% if request.endpoint == 'routes.entrees_sorties' %}active{% endif %}">
-                            <i class="fas fa-exchange-alt"></i> <span>Entrées et sorties</span>
-                        </a>
-                    {% endif %}
-                    {% if current_user.has_permission('voir_stock_boutique') %}
-                        <a href="/stock_boutique" class="nav-link {% if request.endpoint == 'routes.stock_boutique' %}active{% endif %}">
-                            <i class="fas fa-store"></i> <span>Stock en Boutique</span>
-                        </a>
-                    {% endif %}
-                    {% if current_user.has_permission('voir_stock_globale') %}
-                        <a href="/stock_global" class="nav-link {% if request.endpoint == 'routes.stock_global' %}active{% endif %}">
-                            <i class="fas fa-boxes"></i> <span>Stock Global</span>
-                        </a>
-                    {% endif %}
-                </div>
-            {% endif %}
-
-            <!-- Ventes -->
-            {% if current_user.has_permission('gestion_ventes') or current_user.has_permission('voir_historique_vente') %}
-                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-ventes">
-                    <i class="fas fa-shopping-cart"></i> <span>Ventes</span>
-                </a>
-                <div class="nav-dropdown" id="nav-dropdown-ventes">
+                {# ---------- Ventes ---------- #}
+                {% if current_user.has_permission('gestion_ventes') or current_user.has_permission('voir_historique_vente') %}
+                    <div class="nav-section">Ventes</div>
                     {% if current_user.has_permission('gestion_ventes') %}
-                        <a href="/ventes" class="nav-link {% if request.endpoint == 'routes.ventes' %}active{% endif %}">
-                            <i class="fas fa-cart-plus"></i> <span>Gérer Ventes</span>
+                        {{ nav_item('routes.ventes', '/ventes', 'fa-cash-register', 'Nouvelle vente') }}
+                    {% endif %}
+                    {% if current_user.has_permission('voir_historique_vente') %}
+                        {{ nav_item('routes.factures', '/factures', 'fa-file-invoice', 'Factures') }}
+                        {{ nav_item('routes.factures_credit', '/factures_credit', 'fa-hand-holding-dollar', 'Factures crédit', factures_credit_count if factures_credit_count > 0 else None) }}
+                        {{ nav_item('routes.historique_ventes', '/historique_ventes', 'fa-clock-rotate-left', 'Historique des ventes') }}
+                    {% endif %}
+                    {% if current_user.has_permission('gestion_ventes') %}
+                        {{ nav_item('routes.gestion_clients', '/gestion_clients', 'fa-user-group', 'Clients fidèles') }}
+                    {% endif %}
+                {% endif %}
+
+                {# ---------- Stock ---------- #}
+                {% set voir_stock = current_user.has_permission('gestion_produits') or current_user.has_permission('voir_stock_boutique') or current_user.has_permission('voir_stock_globale') %}
+                {% set voir_depot = current_user.has_permission('gestion_depot') or current_user.has_permission('voir_stock_depot') %}
+                {% if voir_stock or voir_depot %}
+                    <div class="nav-section">Stock</div>
+
+                    {% if voir_stock %}
+                        {% set produits_eps = ['routes.gestion_produits', 'routes.entrees_sorties', 'routes.stock_boutique', 'routes.stock_global', 'routes.produits_en_route'] %}
+                        <button type="button" class="nav-link nav-group-toggle {% if ep in produits_eps %}active has-active{% endif %}" data-group="produits" aria-expanded="{{ 'true' if ep in produits_eps else 'false' }}">
+                            <i class="fas fa-cubes"></i><span>Produits &amp; boutique</span><i class="fas fa-chevron-right chevron"></i>
+                        </button>
+                        <div class="nav-dropdown {% if ep in produits_eps %}open{% endif %}" id="nav-dropdown-produits">
+                            {% if current_user.has_permission('gestion_produits') %}
+                                {{ nav_item('routes.gestion_produits', '/gestion_produits', 'fa-pen-to-square', 'Catalogue produits') }}
+                                {{ nav_item('routes.entrees_sorties', '/entrees_sorties', 'fa-right-left', 'Entrées et sorties') }}
+                                {{ nav_item('routes.produits_en_route', '/produits_en_route', 'fa-truck-fast', 'Produits en route') }}
+                            {% endif %}
+                            {% if current_user.has_permission('voir_stock_boutique') %}
+                                {{ nav_item('routes.stock_boutique', '/stock_boutique', 'fa-store', 'Stock boutique') }}
+                            {% endif %}
+                            {% if current_user.has_permission('voir_stock_globale') %}
+                                {{ nav_item('routes.stock_global', '/stock_global', 'fa-boxes-stacked', 'Stock global') }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+
+                    {% if voir_depot %}
+                        {% set depot_eps = ['routes.gestion_transactions_depot', 'routes.gestion_livraisons', 'routes.stock_depot', 'routes.livraisons_client'] %}
+                        <button type="button" class="nav-link nav-group-toggle {% if ep in depot_eps %}active has-active{% endif %}" data-group="depot" aria-expanded="{{ 'true' if ep in depot_eps else 'false' }}">
+                            <i class="fas fa-warehouse"></i><span>Dépôt</span><i class="fas fa-chevron-right chevron"></i>
+                        </button>
+                        <div class="nav-dropdown {% if ep in depot_eps %}open{% endif %}" id="nav-dropdown-depot">
+                            {% if current_user.has_permission('gestion_depot') %}
+                                {{ nav_item('routes.gestion_livraisons', '/gestion_livraisons', 'fa-truck', 'Livraisons') }}
+                                {{ nav_item('routes.gestion_transactions_depot', '/gestion_transactions_depot', 'fa-right-left', 'Transactions dépôt') }}
+                            {% endif %}
+                            {% if current_user.has_permission('voir_stock_depot') %}
+                                {{ nav_item('routes.stock_depot', '/stock_depot', 'fa-boxes-stacked', 'Stock au dépôt') }}
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+
+                {# ---------- Finances ---------- #}
+                {% if current_user.has_permission('gestion_caise') or current_user.has_permission('gestion_banque') or current_user.has_permission('voir_benefice') or current_user.has_permission('gestion_depenses_ordinaires') or current_user.has_permission('gestion_depenses_recurrentes') %}
+                    <div class="nav-section">Finances</div>
+                    {% if current_user.has_permission('gestion_caise') %}
+                        {{ nav_item('routes.gestion_caisse', '/gestion_caisse', 'fa-wallet', 'Caisse') }}
+                    {% endif %}
+                    {% if current_user.has_permission('gestion_banque') %}
+                        {{ nav_item('routes.gestion_compte_bancaire', '/gestion_compte_bancaire', 'fa-university', 'Compte bancaire') }}
+                    {% endif %}
+                    {% if current_user.has_permission('gestion_depenses_ordinaires') %}
+                        {{ nav_item('routes.gestion_depenses_ordinaires', '/depenses_ordinaires', 'fa-receipt', 'Dépenses ordinaires') }}
+                    {% endif %}
+                    {% if current_user.has_permission('gestion_depenses_recurrentes') %}
+                        {{ nav_item('routes.gestion_depenses_recurrentes', '/depenses_recurrentes', 'fa-repeat', 'Dépenses récurrentes') }}
+                    {% endif %}
+                    {% if current_user.has_permission('voir_benefice') %}
+                        {{ nav_item('routes.gestion_benefices', '/benefices', 'fa-chart-line', 'Bénéfices') }}
+                    {% endif %}
+                {% endif %}
+
+                {# ---------- Administration ---------- #}
+                <div class="nav-section">Administration</div>
+                {% if current_user.has_permission('gestion_utilisateurs') %}
+                    {{ nav_item('routes.gestion_utilisateurs', '/gestion_utilisateurs', 'fa-users-gear', 'Utilisateurs') }}
+                    <a href="{{ url_for('routes.telecharger_base_donnees') }}" class="nav-link" data-no-loading>
+                        <i class="fas fa-database"></i><span>Sauvegarder la base</span>
+                    </a>
+                {% endif %}
+                {{ nav_item('routes.parametres', '/parametres', 'fa-gear', 'Paramètres') }}
+            {% endif %}
+        </nav>
+
+        {% if current_user.is_authenticated %}
+        <div class="sidebar-footer">
+            <img src="{{ photo_profil }}" alt="">
+            <div class="text-truncate">
+                <div class="who text-truncate">{{ current_user.firstname or '' }} {{ current_user.lastname or '' }}</div>
+                <div class="role">{{ current_user.role }}</div>
+            </div>
+            <a href="/logout" title="Déconnexion" aria-label="Déconnexion"><i class="fas fa-arrow-right-from-bracket"></i></a>
+        </div>
+        {% endif %}
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <!-- ===================== Contenu ===================== -->
+    <div class="content">
+        <header class="topbar">
+            <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Ouvrir le menu">
+                <i class="fas fa-bars"></i>
+            </button>
+
+            <div class="page-title">
+                <h1 id="topbar-title" data-fallback="{{ self.title()|replace(' - MKM Shop', '')|trim }}">{% block page_title %}{% endblock %}</h1>
+                <div class="crumb d-none d-sm-block"></div>
+            </div>
+
+            <div class="topbar-actions">
+                {% if current_user.is_authenticated %}
+                    {% if current_user.has_permission('gestion_ventes') and ep != 'routes.ventes' %}
+                        <a href="/ventes" class="btn btn-primary btn-sm d-none d-md-inline-flex">
+                            <i class="fas fa-plus me-1"></i> Nouvelle vente
                         </a>
                     {% endif %}
                     {% if current_user.has_permission('voir_historique_vente') %}
-                        <a href="/historique_ventes" class="nav-link {% if request.endpoint == 'routes.historique_ventes' %}active{% endif %}">
-                            <i class="fas fa-history"></i> <span>Historique des Ventes</span>
-                        </a>
-                        <a href="/factures" class="nav-link {% if request.endpoint == 'routes.factures' %}active{% endif %}">
-                            <i class="fas fa-file-invoice"></i> <span>Factures</span>
-                        </a>
-                        <!-- Lien vers les factures en crédit -->
-                        <a href="/factures_credit" class="nav-link {% if request.endpoint == 'routes.factures_credit' %}active{% endif %}">
-                            <i class="fas fa-credit-card"></i> <span>Factures Crédit</span>
-                            {% if factures_credit_count > 0 %}
-                                <span class="badge bg-danger ms-1">{{ factures_credit_count }}</span>
-                            {% endif %}
-                        </a>
-                        {% if current_user.has_permission('gestion_ventes') %}
-                        <a href="/gestion_clients" class="nav-link {% if request.endpoint == 'routes.gestion_clients' %}active{% endif %}">
-                            <i class="fas fa-user-friends"></i> <span>Clients Fidèles</span>
-                        </a>
-                        {% endif %}
-                    {% endif %}
-                </div>
-            {% endif %}
-
-            <!-- Dépenses -->
-            {% if current_user.has_permission('gestion_depenses_ordinaires') or current_user.has_permission('gestion_depenses_recurrentes') %}
-                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-depenses">
-                    <i class="fas fa-money-bill-wave"></i> <span>Dépenses</span>
-                </a>
-                <div class="nav-dropdown" id="nav-dropdown-depenses">
-                    {% if current_user.has_permission('gestion_depenses_ordinaires') %}
-                        <a href="/depenses_ordinaires" class="nav-link {% if request.endpoint == 'routes.depenses_ordinaires' %}active{% endif %}">
-                            <i class="fas fa-list"></i> <span>Gérer Dépenses Ordinaires</span>
+                        <a href="/factures_credit" class="icon-btn" title="Factures en crédit" aria-label="Factures en crédit">
+                            <i class="fas fa-bell"></i>
+                            {% if factures_credit_count > 0 %}<span class="dot">{{ factures_credit_count }}</span>{% endif %}
                         </a>
                     {% endif %}
-                    {% if current_user.has_permission('gestion_depenses_recurrentes') %}
-                        <a href="/depenses_recurrentes" class="nav-link {% if request.endpoint == 'routes.depenses_recurrentes' %}active{% endif %}">
-                            <i class="fas fa-list"></i> <span>Gérer Dépenses Récurrentes</span>
-                        </a>
-                    {% endif %}
-                </div>
-            {% endif %}
 
-            <!-- Dépôt -->
-            {% if current_user.has_permission('gestion_depot') or current_user.has_permission('voir_stock_depot') or current_user.has_permission('gestion_livraisons') %}
-                <a href="javascript:void(0)" class="nav-link dropdown-toggle" id="dropdown-depot">
-                    <i class="fas fa-warehouse"></i> <span>Dépôt</span>
-                </a>
-                <div class="nav-dropdown" id="nav-dropdown-depot">
-                    {% if current_user.has_permission('gestion_depot') %}
-                        <a href="/gestion_transactions_depot" class="nav-link {% if request.endpoint == 'routes.gestion_transactions_depot' %}active{% endif %}">
-                            <i class="fas fa-exchange-alt"></i> <span>Gérer Transactions Dépôt</span>
-                        </a>
-                    {% endif %}
-                    {% if current_user.has_permission('gestion_depot') %}
-                        <a href="/gestion_livraisons" class="nav-link {% if request.endpoint == 'routes.gestion_livraisons' %}active{% endif %}">
-                            <i class="fas fa-truck"></i> <span>Gestion des Livraisons</span>
-                        </a>
-                    {% endif %}
-                    {% if current_user.has_permission('voir_stock_depot') %}
-                        <a href="/stock_depot" class="nav-link {% if request.endpoint == 'routes.stock_depot' %}active{% endif %}">
-                            <i class="fas fa-boxes"></i> <span>Voir le Stock au Dépôt</span>
-                        </a>
-                    {% endif %}
-                </div>
-            {% endif %}
-
-            <!-- Caisse -->
-            {% if current_user.has_permission('gestion_caise') %}
-                <a href="/gestion_caisse" class="nav-link {% if request.endpoint == 'routes.gestion_caisse' %}active{% endif %}">
-                    <i class="fas fa-cash-register"></i> <span>Gestion de la Caisse</span>
-                </a>
-            {% endif %}
-
-            <!-- Compte Bancaire -->
-            {% if current_user.has_permission('gestion_banque') %}
-                <a href="/gestion_compte_bancaire" class="nav-link {% if request.endpoint == 'routes.gestion_compte_bancaire' %}active{% endif %}">
-                    <i class="fas fa-piggy-bank"></i> <span>Gestion du Compte Bancaire</span>
-                </a>
-            {% endif %}
-
-            <!-- Bénéfices -->
-            {% if current_user.has_permission('voir_benefice') %}
-                <a href="/benefices" class="nav-link {% if request.endpoint == 'routes.gestion_benefices' %}active{% endif %}">
-                    <i class="fas fa-chart-line"></i> <span>Gestion des Bénéfices</span>
-                </a>
-            {% endif %}
-
-            <!-- Utilisateurs -->
-            {% if current_user.has_permission('gestion_utilisateurs') %}
-                <a href="/gestion_utilisateurs" class="nav-link {% if request.endpoint == 'routes.gestion_utilisateurs' %}active{% endif %}">
-                    <i class="fas fa-users-cog"></i> <span>Gestion des Utilisateurs</span>
-                </a>
-            {% endif %}
-
-            <!-- Télécharger la Base de Données -->
-            {% if current_user.has_permission('gestion_utilisateurs') %}
-                <a href="{{ url_for('routes.telecharger_base_donnees') }}" class="nav-link">
-                    <i class="fas fa-database"></i> <span>Télécharger Base de Données</span>
-                </a>
-            {% endif %}
-
-            <!-- Paramètres -->
-            <a href="/parametres" class="nav-link {% if request.endpoint == 'routes.parametres' %}active{% endif %}">
-                <i class="fas fa-cog"></i> <span>Paramètres</span>
-            </a>
-        {% endif %}
-    </div>
-
-    <!-- Overlay pour le menu mobile -->
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
-
-    <!-- Content -->
-    <div class="content">
-        <!-- Header -->
-        <div class="header">
-            <!-- Bouton pour ouvrir/fermer le menu sur mobile -->
-            <div class="menu-toggle" id="menu-toggle">
-                <i class="fas fa-bars"></i>
-            </div>
-
-            <!-- Titre de la page actuelle -->
-            <div class="page-title">
-                <h4 class="mb-0">{% block page_title %}{% endblock %}</h4>
-            </div>
-            
-            <!-- Profile -->
-            <div class="dropdown">
-                {% if current_user.is_authenticated %}
-                    <button class="btn btn-light dropdown-toggle" id="profileDropdown" data-bs-toggle="dropdown">
-                        <img src="{{ url_for('static', filename=current_user.photo if current_user.photo else 'images/default.png') }}" 
-                             alt="Profile Picture" width="40" height="40" class="rounded-circle">
-                        <span class="d-none d-md-inline">{{ current_user.firstname }} {{ current_user.lastname }}</span>
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="profileDropdown">
-                        <!-- Logo de l'utilisateur -->
-                        <li class="logo-container">
-                            <img src="{{ url_for('static', filename=current_user.photo if current_user.photo else 'images/default.png') }}" 
-                                 alt="Profile Picture" class="rounded-circle">
-                        </li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/profile"><i class="fas fa-user"></i> Votre Profil</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="/logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
-                    </ul>
+                    <div class="dropdown">
+                        <button class="profile-btn" id="profileDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                            <img src="{{ photo_profil }}" alt="Photo de profil">
+                            <span class="d-none d-md-inline">{{ current_user.firstname or current_user.email }}</span>
+                            <i class="fas fa-chevron-down small text-muted d-none d-md-inline"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end profile-menu" aria-labelledby="profileDropdown">
+                            <li class="profile-head">
+                                <img src="{{ photo_profil }}" alt="">
+                                <div class="text-truncate">
+                                    <div class="name text-truncate">{{ current_user.firstname or '' }} {{ current_user.lastname or '' }}</div>
+                                    <div class="mail text-truncate">{{ current_user.email }}</div>
+                                </div>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="/profile"><i class="fas fa-user"></i> Mon profil</a></li>
+                            <li><a class="dropdown-item" href="/parametres"><i class="fas fa-gear"></i> Paramètres</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-danger" href="/logout"><i class="fas fa-arrow-right-from-bracket"></i> Déconnexion</a></li>
+                        </ul>
+                    </div>
                 {% else %}
-                    <a href="/login" class="btn btn-light">
-                        <i class="fas fa-sign-in-alt"></i> Connexion
-                    </a>
+                    <a href="/login" class="btn btn-primary btn-sm"><i class="fas fa-right-to-bracket me-1"></i> Connexion</a>
                 {% endif %}
             </div>
-        </div>
+        </header>
 
-        <!-- Container pour les notifications AJAX (sera utilisé par le JS) -->
-        <div id="notifications-container" class="position-fixed top-0 end-0 p-3" style="z-index: 9999; max-width: 350px; display: none;"></div>
+        <!-- Notifications AJAX -->
+        <div id="notifications-container" class="position-fixed end-0 p-3" style="display: none;"></div>
 
-        <!-- Main Content -->
-        <div class="container-fluid mt-4 content-ajax">
+        <main class="main-content content-ajax">
             {% block content %}{% endblock %}
-        </div>
+        </main>
 
-        <!-- Footer -->
-        <footer class="footer mt-auto py-3 bg-light border-top">
-            <div class="container">
-                <div class="row">
-                    <div class="col-md-6">
-                        <span class="text-muted">© 2024 MKM Shop - Gestion Commerciale</span>
-                    </div>
-                    <div class="col-md-6 text-md-end">
-                        <span class="text-muted">Version 2.0 | {% if current_user.is_authenticated %}Connecté en tant que <strong>{{ current_user.role }}</strong>{% endif %}</span>
-                    </div>
-                </div>
-            </div>
+        <footer class="app-footer">
+            <span>© {{ annee_courante if annee_courante is defined else '' }} MKM Shop — Gestion commerciale</span>
+            <span>Version 2.1{% if current_user.is_authenticated %} · Connecté en tant que <strong class="text-capitalize">{{ current_user.role }}</strong>{% endif %}</span>
         </footer>
     </div>
 
-    <!-- Bootstrap 5 JS and dependencies (local) -->
     <script src="{{ url_for('static', filename='js/jquery-3.6.0.min.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/popper.min.js') }}"></script>
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
-    
-    <!-- Custom JS - VERSION SIMPLIFIÉE ET FONCTIONNELLE -->
+
     <script>
-        // Gestion du menu mobile - SIMPLIFIÉE
+        // ----- Menu mobile -----
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebar-overlay');
-        const menuToggle = document.getElementById('menu-toggle');
-        const closeMenu = document.getElementById('close-menu');
 
-        // Fonction pour ouvrir/fermer le menu
-        function toggleMenu() {
-            const isOpen = sidebar.classList.toggle('open');
-            sidebarOverlay.style.display = isOpen ? 'block' : 'none';
-            
-            // Empêcher le défilement du body quand le menu est ouvert
-            document.body.style.overflow = isOpen ? 'hidden' : '';
+        function openSidebar() {
+            sidebar.classList.add('open');
+            sidebarOverlay.style.display = 'block';
+            document.body.style.overflow = 'hidden';
         }
-
-        // Fonction pour fermer le menu
         function closeSidebar() {
             sidebar.classList.remove('open');
             sidebarOverlay.style.display = 'none';
             document.body.style.overflow = '';
         }
-
-        menuToggle.addEventListener('click', toggleMenu);
-        closeMenu.addEventListener('click', closeSidebar);
+        document.getElementById('menu-toggle').addEventListener('click', () =>
+            sidebar.classList.contains('open') ? closeSidebar() : openSidebar());
+        document.getElementById('close-menu').addEventListener('click', closeSidebar);
         sidebarOverlay.addEventListener('click', closeSidebar);
+        document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSidebar(); });
+        window.addEventListener('resize', () => { if (window.innerWidth >= 992) closeSidebar(); });
 
-        // Gestion des dropdowns - VERSION SIMPLIFIÉE ET FIABLE
-        document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
-            toggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Fermer les autres dropdowns
-                document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-                    if (dropdown !== this.nextElementSibling) {
-                        dropdown.classList.remove('open');
-                        dropdown.previousElementSibling?.classList.remove('active');
-                    }
-                });
-                
-                // Ouvrir/fermer le dropdown courant
-                const dropdown = this.nextElementSibling;
-                if (dropdown && dropdown.classList.contains('nav-dropdown')) {
-                    dropdown.classList.toggle('open');
-                    this.classList.toggle('active');
-                }
+        // ----- Groupes repliables de la barre latérale -----
+        // (classe dédiée : n'interfère plus avec les menus déroulants Bootstrap)
+        document.querySelectorAll('.nav-group-toggle').forEach(toggle => {
+            toggle.addEventListener('click', function () {
+                const panel = this.nextElementSibling;
+                const ouvrir = !panel.classList.contains('open');
+                panel.classList.toggle('open', ouvrir);
+                this.classList.toggle('active', ouvrir || this.classList.contains('has-active'));
+                this.setAttribute('aria-expanded', ouvrir ? 'true' : 'false');
             });
         });
 
-        // Fermer les dropdowns quand on clique ailleurs
-        document.addEventListener('click', function(e) {
-            if (!e.target.closest('.dropdown-toggle') && !e.target.closest('.nav-dropdown')) {
-                document.querySelectorAll('.nav-dropdown').forEach(dropdown => {
-                    dropdown.classList.remove('open');
-                });
-                document.querySelectorAll('.dropdown-toggle').forEach(toggle => {
-                    toggle.classList.remove('active');
-                });
-            }
-        });
-
-        // Fermer le menu sur mobile après clic sur un lien
-        document.querySelectorAll('.nav-link[href^="/"]').forEach(link => {
-            link.addEventListener('click', function(e) {
-                if (window.innerWidth < 992) {
-                    closeSidebar();
-                }
-            });
-        });
-
-        // Mettre à jour le titre de la page
-        function updatePageTitle() {
-            const pageTitle = document.querySelector('h1, h2, h3, h4')?.textContent || document.title;
-            const pageTitleElement = document.querySelector('.page-title h4');
-            if (pageTitleElement && pageTitle) {
-                pageTitleElement.textContent = pageTitle;
-            }
-        }
-
-        // Initialiser la page
-        document.addEventListener('DOMContentLoaded', function() {
-            updatePageTitle();
-            
-            // Marquer le lien actif
-            const currentPath = window.location.pathname;
-            document.querySelectorAll('.nav-link[href^="/"]').forEach(link => {
-                if (link.getAttribute('href') === currentPath) {
+        document.addEventListener('DOMContentLoaded', function () {
+            // Lien actif par l'URL (secours si l'endpoint n'est pas listé)
+            const path = window.location.pathname;
+            document.querySelectorAll('.sidebar .nav-link[href]').forEach(link => {
+                if (link.getAttribute('href') === path) {
                     link.classList.add('active');
-                    
-                    // Ouvrir le dropdown parent si nécessaire
-                    const parentDropdown = link.closest('.nav-dropdown');
-                    if (parentDropdown) {
-                        parentDropdown.classList.add('open');
-                        const toggle = parentDropdown.previousElementSibling;
-                        if (toggle && toggle.classList.contains('dropdown-toggle')) {
-                            toggle.classList.add('active');
-                        }
+                    const panel = link.closest('.nav-dropdown');
+                    if (panel) {
+                        panel.classList.add('open');
+                        panel.previousElementSibling?.classList.add('active', 'has-active');
                     }
                 }
             });
-            
-            // Initialiser Bootstrap components
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl);
-            });
-        });
 
-        // Gestion du redimensionnement
-        window.addEventListener('resize', function() {
-            if (window.innerWidth >= 992) {
-                closeSidebar();
+            // Titre de la barre supérieure : à défaut, premier titre de la page
+            const topTitle = document.getElementById('topbar-title');
+            if (topTitle && !topTitle.textContent.trim()) {
+                const h = document.querySelector('.main-content h2');
+                topTitle.textContent = (topTitle.dataset.fallback || (h ? h.textContent : document.title)).trim();
             }
+
+            // Date du jour
+            const crumb = document.querySelector('.topbar .crumb');
+            if (crumb && !crumb.textContent.trim()) {
+                const d = new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+                crumb.textContent = d.charAt(0).toUpperCase() + d.slice(1);
+            }
+            const footerYear = document.querySelector('.app-footer span');
+            if (footerYear && footerYear.textContent.startsWith('© ')) {
+                footerYear.textContent = footerYear.textContent.replace(/^© \s*/, '© ' + new Date().getFullYear() + ' ');
+            }
+
+            // Fermer le menu mobile après un clic sur un lien
+            document.querySelectorAll('.sidebar a.nav-link').forEach(link =>
+                link.addEventListener('click', () => { if (window.innerWidth < 992) closeSidebar(); }));
+
+            // Info-bulles Bootstrap
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => new bootstrap.Tooltip(el));
         });
 
-        // Fonctions utilitaires pour AJAX
-        window.showLoading = function() {
-            document.getElementById('loading-overlay').classList.add('active');
-        };
-
-        window.hideLoading = function() {
-            document.getElementById('loading-overlay').classList.remove('active');
-        };
-
-        window.showNotification = function(message, type = 'info', duration = 5000) {
-            const container = document.getElementById('notifications-container');
-            container.style.display = 'block';
-            
-            const notification = document.createElement('div');
-            notification.className = `toast-notification toast-${type}`;
-            notification.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <i class="fas ${getIconForType(type)} me-2"></i>
-                    <div class="flex-grow-1">${message}</div>
-                    <button type="button" class="btn-close btn-close-sm ms-2" onclick="this.parentElement.parentElement.remove()"></button>
-                </div>
-            `;
-            
-            container.appendChild(notification);
-            
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.style.opacity = '0';
-                    notification.style.transition = 'opacity 0.5s';
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 500);
-                }
-                
-                if (container.children.length === 0) {
-                    container.style.display = 'none';
-                }
-            }, duration);
-        };
+        // ----- Utilitaires AJAX (utilisés par les pages) -----
+        window.showLoading = () => document.getElementById('loading-overlay').classList.add('active');
+        window.hideLoading = () => document.getElementById('loading-overlay').classList.remove('active');
 
         function getIconForType(type) {
             switch (type) {
-                case 'success': return 'fa-check-circle';
-                case 'error': return 'fa-exclamation-circle';
-                case 'warning': return 'fa-exclamation-triangle';
-                default: return 'fa-info-circle';
+                case 'success': return 'fa-circle-check';
+                case 'error': return 'fa-circle-exclamation';
+                case 'warning': return 'fa-triangle-exclamation';
+                default: return 'fa-circle-info';
             }
         }
 
-        // Gestion des formulaires AJAX
-        document.addEventListener('submit', function(e) {
+        window.showNotification = function (message, type = 'info', duration = 5000) {
+            const container = document.getElementById('notifications-container');
+            container.style.display = 'block';
+
+            const notification = document.createElement('div');
+            notification.className = `toast-notification toast-${type}`;
+            notification.setAttribute('role', 'status');
+            notification.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <i class="fas ${getIconForType(type)} mt-1"></i>
+                    <div class="flex-grow-1"></div>
+                    <button type="button" class="btn-close btn-sm ms-2" aria-label="Fermer"></button>
+                </div>`;
+            notification.querySelector('.flex-grow-1').textContent = message;
+            notification.querySelector('.btn-close').addEventListener('click', () => notification.remove());
+            container.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.transition = 'opacity .4s';
+                notification.style.opacity = '0';
+                setTimeout(() => {
+                    notification.remove();
+                    if (!container.children.length) container.style.display = 'none';
+                }, 400);
+            }, duration);
+        };
+
+        // ----- Formulaires AJAX génériques -----
+        document.addEventListener('submit', function (e) {
             const form = e.target;
-            
-            if (form.classList.contains('ajax-form')) {
-                e.preventDefault();
-                
-                showLoading();
-                
-                const formData = new FormData(form);
-                const data = Object.fromEntries(formData.entries());
-                
-                fetch(form.action, {
-                    method: form.method,
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    hideLoading();
-                    if (data.success) {
-                        showNotification(data.message, 'success');
-                    } else {
-                        showNotification(data.message, 'error');
-                    }
-                })
-                .catch(error => {
-                    hideLoading();
-                    showNotification('Erreur lors de la requête', 'error');
-                    console.error('Erreur:', error);
-                });
-            }
+            if (!form.classList.contains('ajax-form')) return;
+            e.preventDefault();
+            showLoading();
+            const data = Object.fromEntries(new FormData(form).entries());
+            fetch(form.action, {
+                method: form.method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+            .then(r => r.json())
+            .then(data => {
+                hideLoading();
+                showNotification(data.message, data.success ? 'success' : 'error');
+            })
+            .catch(error => {
+                hideLoading();
+                showNotification('Erreur lors de la requête', 'error');
+                console.error('Erreur:', error);
+            });
         });
     </script>
-    
-    <!-- Scripts spécifiques à la page -->
+
     {% block scripts %}{% endblock %}
-    
-    <!-- Charger le script AJAX uniquement pour la page des ventes -->
+
     {% if request.endpoint == 'routes.ventes' %}
     <script src="{{ url_for('static', filename='js/ventes_ajax.js') }}" defer></script>
     {% endif %}

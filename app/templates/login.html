@@ -3,104 +3,138 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Connexion - Gestion des Utilisateurs</title>
-    
-    <!-- Bootstrap 5 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    
-    <!-- Custom CSS -->
+    <meta name="theme-color" content="#0f172a">
+    <title>Connexion · MKM Shop</title>
+    <link rel="icon" href="{{ url_for('static', filename='uploads/logo.png') }}">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/all.min.css') }}" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
     <style>
-        body {
-            background: linear-gradient(135deg, #6a11cb, #2575fc);
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin: 0;
+        body { display: grid; grid-template-columns: 1fr; min-height: 100vh; background: var(--mkm-surface); }
+        @media (min-width: 992px) { body { grid-template-columns: 1.05fr 1fr; } }
+
+        .auth-aside {
+            display: none;
+            position: relative;
+            overflow: hidden;
+            padding: 3rem;
+            color: #fff;
+            background:
+                radial-gradient(900px 500px at 110% -10%, rgba(99, 102, 241, .55), transparent 60%),
+                radial-gradient(700px 400px at -10% 110%, rgba(14, 165, 233, .45), transparent 60%),
+                linear-gradient(160deg, #0f172a 0%, #1e3a8a 100%);
         }
-        .login-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-            padding: 2rem;
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
+        @media (min-width: 992px) { .auth-aside { display: flex; flex-direction: column; } }
+        .auth-aside .brand { display: flex; align-items: center; gap: .8rem; font-weight: 700; font-size: 1.15rem; }
+        .auth-aside .brand img { width: 46px; height: 46px; border-radius: 12px; background: #fff; object-fit: cover; }
+        .auth-aside h2 { color: #fff; font-size: 2.1rem; font-weight: 700; line-height: 1.2; margin: auto 0 1rem; max-width: 30rem; }
+        .auth-aside p { color: rgba(255, 255, 255, .78); max-width: 30rem; }
+        .auth-features { list-style: none; padding: 0; margin: 2rem 0 auto; display: grid; gap: .9rem; }
+        .auth-features li { display: flex; gap: .8rem; align-items: center; color: rgba(255, 255, 255, .9); }
+        .auth-features i {
+            width: 36px; height: 36px; flex: none;
+            display: inline-flex; align-items: center; justify-content: center;
+            border-radius: 10px; background: rgba(255, 255, 255, .12);
         }
-        .login-card h2 {
-            margin-bottom: 1.5rem;
-            color: #333;
+
+        .auth-main { display: flex; align-items: center; justify-content: center; padding: 2rem 1.25rem; }
+        .auth-card { width: 100%; max-width: 400px; }
+        .auth-card .mobile-brand { display: flex; align-items: center; gap: .7rem; margin-bottom: 2rem; font-weight: 700; }
+        .auth-card .mobile-brand img { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; }
+        @media (min-width: 992px) { .auth-card .mobile-brand { display: none; } }
+        .auth-card h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: .35rem; }
+        .auth-card .lead-sub { color: var(--mkm-muted); margin-bottom: 1.75rem; }
+        .auth-card .form-control { padding: .7rem .9rem; }
+        .auth-card .input-icon { position: relative; }
+        .auth-card .input-icon > i { position: absolute; left: .9rem; top: 50%; transform: translateY(-50%); color: #94a3b8; }
+        .auth-card .input-icon .form-control { padding-left: 2.5rem; }
+        .auth-card .toggle-pass {
+            position: absolute; right: .4rem; top: 50%; transform: translateY(-50%);
+            border: 0; background: none; color: #94a3b8; padding: .35rem .5rem; border-radius: 6px;
         }
-        .login-card .form-control {
-            border-radius: 10px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
-        }
-        .login-card .btn {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 10px;
-            font-size: 1rem;
-        }
-        .login-card .btn-primary {
-            background: #2575fc;
-            border: none;
-        }
-        .login-card .btn-primary:hover {
-            background: #1a5bbf;
-        }
-        .login-card .alert {
-            margin-top: 1rem;
-        }
-        .login-card .footer-links {
-            margin-top: 1.5rem;
-            font-size: 0.9rem;
-        }
-        .login-card .footer-links a {
-            color: #2575fc;
-            text-decoration: none;
-        }
-        .login-card .footer-links a:hover {
-            text-decoration: underline;
-        }
+        .auth-card .toggle-pass:hover { color: var(--mkm-text); background: var(--mkm-surface-2); }
+        .auth-foot { margin-top: 2rem; font-size: .8rem; color: var(--mkm-muted); text-align: center; }
     </style>
 </head>
 <body>
-    <div class="login-card">
-        <h2><i class="fas fa-sign-in-alt"></i> Connexion</h2>
-        
-        <!-- Messages Flash -->
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
+    <section class="auth-aside">
+        <div class="brand">
+            <img src="{{ url_for('static', filename='uploads/logo.png') }}" alt="Logo MKM">
+            MKM Shop
+        </div>
+        <h2>Toute la gestion de votre commerce, au même endroit.</h2>
+        <p>Ventes, stock boutique et dépôt, crédits clients et finances : suivez votre activité en temps réel.</p>
+        <ul class="auth-features">
+            <li><i class="fas fa-cash-register"></i> Ventes comptant et à crédit, factures imprimables</li>
+            <li><i class="fas fa-warehouse"></i> Stock magasin, dépôt et livraisons</li>
+            <li><i class="fas fa-chart-line"></i> Caisse, banque, dépenses et bénéfices</li>
+        </ul>
+    </section>
+
+    <main class="auth-main">
+        <div class="auth-card">
+            <div class="mobile-brand">
+                <img src="{{ url_for('static', filename='uploads/logo.png') }}" alt="Logo MKM">
+                MKM Shop
+            </div>
+
+            <h1>Bon retour 👋</h1>
+            <p class="lead-sub">Connectez-vous pour accéder à votre espace de gestion.</p>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
                 {% for category, message in messages %}
                     <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
                         {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
                     </div>
                 {% endfor %}
-            {% endif %}
-        {% endwith %}
+            {% endwith %}
 
-        <!-- Formulaire de connexion -->
-        <form method="POST">
-            <div class="mb-3">
-                <input type="email" class="form-control" id="email" name="email" placeholder="Email" required>
-            </div>
-            <div class="mb-3">
-                <input type="password" class="form-control" id="password" name="password" placeholder="Mot de passe" required>
-            </div>
-            <button type="submit" class="btn btn-primary">
-                <i class="fas fa-sign-in-alt"></i> Se connecter
-            </button>
-        </form>
-    </div>
+            <form method="POST">
+                <div class="mb-3">
+                    <label for="email" class="form-label">Adresse email</label>
+                    <div class="input-icon">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" class="form-control" id="email" name="email" placeholder="vous@exemple.com" autocomplete="username" required autofocus>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label for="password" class="form-label">Mot de passe</label>
+                    <div class="input-icon">
+                        <i class="fas fa-lock"></i>
+                        <input type="password" class="form-control" id="password" name="password" placeholder="••••••••" autocomplete="current-password" required>
+                        <button type="button" class="toggle-pass" id="toggle-pass" aria-label="Afficher le mot de passe">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg w-100" id="login-btn">
+                    <i class="fas fa-right-to-bracket me-2"></i> Se connecter
+                </button>
+            </form>
 
-    <!-- Bootstrap 5 JS and dependencies -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+            <p class="auth-foot">Mot de passe oublié ? Contactez votre administrateur.</p>
+        </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    <script>
+        const pass = document.getElementById('password');
+        const toggle = document.getElementById('toggle-pass');
+        toggle.addEventListener('click', () => {
+            const visible = pass.type === 'text';
+            pass.type = visible ? 'password' : 'text';
+            toggle.innerHTML = `<i class="fas ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+            toggle.setAttribute('aria-label', visible ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+        });
+        document.querySelector('form').addEventListener('submit', () => {
+            const btn = document.getElementById('login-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Connexion...';
+        });
+    </script>
 </body>
 </html>
