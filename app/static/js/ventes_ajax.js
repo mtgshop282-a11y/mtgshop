@@ -308,7 +308,7 @@ class PanierManager {
                         </div>
                     </td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.quantite || 0}</strong></td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.prix ? parseFloat(item.prix).toFixed(2) : '0.00'} $</strong>${(item.prix_catalogue && item.prix_catalogue - item.prix > 0.005) ? `<div class="small text-muted"><s>${parseFloat(item.prix_catalogue).toFixed(2)} $</s> <span class="badge bg-warning">−${((item.prix_catalogue - item.prix) * item.quantite).toFixed(2)} $</span></div>` : ''}</td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.prix ? parseFloat(item.prix).toFixed(2) : '0.00'} $</strong></td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center; font-weight: 600;"><strong>${item.total ? parseFloat(item.total).toFixed(2) : '0.00'} $</strong></td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; text-align: center;">
                         <button type="button" class="btn btn-sm btn-outline-danger btn-action" onclick="panierManager.supprimerProduit(${item.id})" title="Supprimer du panier">
@@ -415,7 +415,6 @@ class PanierManager {
                                 </td>
                                 <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
                                     <strong>${parseFloat(vente.prix_unitaire || 0).toFixed(2)}$</strong>
-                                    ${vente.remise > 0 ? `<div style="font-size: 9px; text-decoration: line-through;">${parseFloat(vente.prix_catalogue || 0).toFixed(2)}$</div>` : ''}
                                 </td>
                                 <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
                                     <strong>${parseFloat(vente.montant_total || 0).toFixed(2)}$</strong>
@@ -436,7 +435,6 @@ class PanierManager {
                     <div style="display: inline-block; background-color: #e9ecef; padding: 8px 15px; border: 1px solid #000; border-radius: 4px;">
                         <strong>TOTAL GÉNÉRAL: ${parseFloat(facture.montant_total || 0).toFixed(2)}$</strong>
                     </div>
-                    ${facture.remise_totale > 0 ? `<div style="margin-top: 6px; font-size: 11px;"><strong>REMISE ACCORDÉE: ${parseFloat(facture.remise_totale).toFixed(2)}$</strong></div>` : ''}
                 </div>
         `;
         
@@ -864,10 +862,6 @@ class PanierManager {
         if (prix < sel.prixAchat - 0.005) {
             alerte.className = 'small text-danger mt-1';
             alerte.innerHTML = `<i class="fas fa-triangle-exclamation me-1"></i>Sous le prix d'achat (${sel.prixAchat.toFixed(2)} $) : vente à perte`;
-            alerte.style.display = 'block';
-        } else if (prix < sel.prixCatalogue - 0.005) {
-            alerte.className = 'small text-warning mt-1';
-            alerte.innerHTML = `<i class="fas fa-tag me-1"></i>Remise de ${(sel.prixCatalogue - prix).toFixed(2)} $ par unité (prix catalogue ${sel.prixCatalogue.toFixed(2)} $)`;
             alerte.style.display = 'block';
         } else {
             alerte.style.display = 'none';
