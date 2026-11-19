@@ -64,7 +64,7 @@
         <div class="col-12">
             <div class="row g-3">
                 <div class="col-6 col-md-3">
-                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                    <div class="card border-0 shadow-sm kpi kpi-1 h-100">
                         <div class="card-body text-white">
                             <i class="fas fa-calendar-day fa-2x mb-2"></i>
                             <h4 class="mb-0 fw-bold">
@@ -87,7 +87,7 @@
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="card border-0 shadow-sm kpi kpi-2 h-100">
                         <div class="card-body text-white">
                             <i class="fas fa-calendar-week fa-2x mb-2"></i>
                             <h4 class="mb-0 fw-bold">
@@ -110,7 +110,7 @@
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="card border-0 shadow-sm kpi kpi-3 h-100">
                         <div class="card-body text-white">
                             <i class="fas fa-calendar-alt fa-2x mb-2"></i>
                             <h4 class="mb-0 fw-bold">
@@ -133,7 +133,7 @@
                     </div>
                 </div>
                 <div class="col-6 col-md-3">
-                    <div class="card border-0 shadow-sm text-center py-3" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <div class="card border-0 shadow-sm kpi kpi-4 h-100">
                         <div class="card-body text-white">
                             <i class="fas fa-chart-line fa-2x mb-2"></i>
                             <h4 class="mb-0 fw-bold">{{ factures|length }}</h4>
@@ -429,7 +429,7 @@
             <!-- Résumé statistique -->
             <div class="row mt-4 px-3">
                 <div class="col-md-3">
-                    <div class="card bg-primary text-white">
+                    <div class="card kpi kpi-1 h-100">
                         <div class="card-body text-center py-3">
                             <h6 class="card-title mb-1">Total Factures</h6>
                             <h4 class="mb-0" id="totalFacturesCount">{{ factures|length }}</h4>
@@ -437,7 +437,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-success text-white">
+                    <div class="card kpi kpi-4 h-100">
                         <div class="card-body text-center py-3">
                             <h6 class="card-title mb-1">Total Ventes</h6>
                             <h4 class="mb-0" id="totalVentesMontant">{{ "%.2f"|format(factures|sum(attribute='montant_total')) }} $</h4>
@@ -445,7 +445,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-info text-white">
+                    <div class="card kpi kpi-3 h-100">
                         <div class="card-body text-center py-3">
                             <h6 class="card-title mb-1">En Comptant</h6>
                             <h4 class="mb-0" id="totalComptant">{{ "%.2f"|format(factures|selectattr('paiement_credit', 'equalto', false)|sum(attribute='montant_total')) }} $</h4>
@@ -453,7 +453,7 @@
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="card bg-warning text-dark">
+                    <div class="card kpi kpi-5 h-100">
                         <div class="card-body text-center py-3">
                             <h6 class="card-title mb-1">En Crédit</h6>
                             <h4 class="mb-0" id="totalCredit">{{ "%.2f"|format(factures|selectattr('paiement_credit')|sum(attribute='montant_credit')) }} $</h4>

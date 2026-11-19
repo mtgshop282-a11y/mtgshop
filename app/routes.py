@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, make_response, current_app, jsonify, send_file, session
-import os, shutil, zipfile, io, sqlite3
+import os, shutil, zipfile, io, sqlite3, tempfile, logging
 from datetime import datetime, timedelta
+from urllib.parse import urlparse
 import uuid
 from werkzeug.utils import secure_filename
 from flask_login import login_user, logout_user, login_required, current_user
@@ -12,6 +13,44 @@ from .models import db, Produits, Factures, Ventes, Benefices, Panier, Transacti
 
 # Création du Blueprint
 bp = Blueprint('routes', __name__)
+logger = logging.getLogger(__name__)
+
+# Tolérance pour les comparaisons de montants en virgule flottante
+EPSILON_MONTANT = 0.005
+TYPES_LIVRAISON = ('sur_place', 'depot')
+
+
+def _url_locale_sure(cible):
+    """Vrai si l'URL de redirection reste sur ce site (évite les redirections ouvertes)."""
+    if not cible:
+        return False
+    parsed = urlparse(cible)
+    return not parsed.netloc and not parsed.scheme and cible.startswith('/') and not cible.startswith('//')
+
+
+def _sauver_photo(photo):
+    """Enregistre une photo envoyée (jpg/jpeg/png uniquement) et retourne son chemin relatif à /static."""
+    if not allowed_file(photo.filename):
+        raise ValueError("Format de photo non autorisé (jpg, jpeg ou png uniquement).")
+    unique_filename = generate_unique_filename(photo.filename)
+    photo.save(os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename))
+    return f"uploads/{unique_filename}"
+
+
+def _supprimer_photo(chemin_relatif):
+    """Supprime l'ancienne photo d'un utilisateur, sans toucher aux images par défaut."""
+    if not chemin_relatif:
+        return
+    nom = os.path.basename(chemin_relatif)
+    if nom in ('default.png', 'logo.png'):
+        return
+    delete_file(os.path.join(current_app.config['UPLOAD_FOLDER'], nom))
+
+
+def _livraison_effectuee(facture_id):
+    """Le stock dépôt n'est déduit qu'au passage d'une livraison au statut « livree »."""
+    livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
+    return livraison is not None and livraison.statut == 'livree'
 
 # Décorateur pour vérifier les permissions
 def permission_required(permission):
@@ -38,10 +77,11 @@ def inject_common_variables():
             if current_user.has_permission('voir_historique_vente'):
                 # Compter uniquement les factures avec du crédit à payer
                 common_vars['factures_credit_count'] = Factures.query.filter(
-                    Factures.montant_credit > 0
+                    Factures.montant_credit > 0,
+                    or_(Factures.annulee == False, Factures.annulee.is_(None))
                 ).count()
     except Exception as e:
-        print(f"Error in context processor: {e}")
+        logger.warning(f"Erreur dans le context processor: {e}")
         common_vars['factures_credit_count'] = 0
         
     return common_vars
@@ -51,20 +91,56 @@ def inject_common_variables():
 @bp.route('/')
 @login_required
 def index():
-    total_produits = Produits.query.count()
+    """Tableau de bord : indicateurs adaptés aux permissions de l'utilisateur."""
+    non_annulee = or_(Factures.annulee == False, Factures.annulee.is_(None))
+    debut_jour = datetime.combine(datetime.now().date(), datetime.min.time())
+    debut_mois = debut_jour.replace(day=1)
+    SEUIL_STOCK_BAS = 5
+
+    dashboard = {'total_produits': Produits.query.count()}
+
+    if current_user.has_permission('voir_historique_vente') or current_user.has_permission('gestion_ventes'):
+        def _ventes_depuis(debut):
+            nb, total = db.session.query(func.count(Factures.id), func.coalesce(func.sum(Factures.montant_total), 0)) \
+                .filter(non_annulee, Factures.date_facture >= debut).one()
+            return nb, float(total or 0)
+        dashboard['ventes_jour'], dashboard['ca_jour'] = _ventes_depuis(debut_jour)
+        dashboard['ventes_mois'], dashboard['ca_mois'] = _ventes_depuis(debut_mois)
+        credit = db.session.query(func.coalesce(func.sum(Factures.montant_credit), 0), func.count(Factures.id)) \
+            .filter(non_annulee, Factures.montant_credit > 0).one()
+        dashboard['credit_total'], dashboard['credit_factures'] = float(credit[0] or 0), credit[1]
+        dashboard['dernieres_factures'] = Factures.query.filter(non_annulee) \
+            .order_by(Factures.date_facture.desc()).limit(6).all()
+
+    if current_user.has_permission('voir_stock_boutique') or current_user.has_permission('gestion_produits'):
+        dashboard['stock_bas'] = Produits.query.filter(Produits.quantite <= SEUIL_STOCK_BAS) \
+            .order_by(Produits.quantite.asc(), Produits.nom.asc()).limit(6).all()
+        dashboard['stock_bas_count'] = Produits.query.filter(Produits.quantite <= SEUIL_STOCK_BAS).count()
+        dashboard['seuil_stock_bas'] = SEUIL_STOCK_BAS
+
+    if current_user.has_permission('gestion_depot'):
+        dashboard['livraisons_attente'] = LivraisonDepot.query \
+            .filter(LivraisonDepot.statut.in_(['en_attente', 'en_preparation'])).count()
+
     transactions = TransactionsProduit.query.order_by(TransactionsProduit.date_transaction.desc()).limit(5).all()
-    return render_template('index.html', total_produits=total_produits, transactions=transactions)
+    return render_template('index.html', d=dashboard, transactions=transactions,
+                           total_produits=dashboard['total_produits'])
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('routes.index'))
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        user = User.query.filter_by(email=email).first()
+        email = (request.form.get('email') or '').strip()
+        password = request.form.get('password') or ''
+        user = User.query.filter(func.lower(User.email) == email.lower()).first() if email else None
 
-        if user and bcrypt.check_password_hash(user.password, password):
+        if user and password and bcrypt.check_password_hash(user.password, password):
             login_user(user)
             flash('Connexion réussie!', 'success')
+            cible = request.args.get('next')
+            if _url_locale_sure(cible):
+                return redirect(cible)
             return redirect(url_for('routes.index'))
         else:
             flash('Email ou mot de passe incorrect.', 'danger')
@@ -82,28 +158,31 @@ def logout():
 def profile():
     if request.method == 'POST':
         try:
-            current_user.firstname = request.form['firstname']
-            current_user.lastname = request.form['lastname']
-            current_user.email = request.form['email']
-            
-            if request.form['password']:
+            email = request.form.get('email', '').strip()
+            if not email:
+                raise ValueError("L'email est obligatoire.")
+            existant = User.query.filter(func.lower(User.email) == email.lower(), User.id != current_user.id).first()
+            if existant:
+                raise ValueError("Cet email est déjà utilisé par un autre utilisateur.")
+
+            current_user.firstname = request.form.get('firstname', '').strip()
+            current_user.lastname = request.form.get('lastname', '').strip()
+            current_user.email = email
+
+            if request.form.get('password'):
                 current_user.set_password(request.form['password'])
-            
-            photo = request.files['photo']
+
+            photo = request.files.get('photo')
             if photo and photo.filename != '':
-                if current_user.photo:
-                    old_photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], current_user.photo.split('/')[-1])
-                    if os.path.exists(old_photo_path):
-                        os.remove(old_photo_path)
-                
-                filename = secure_filename(photo.filename)
-                unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-                photo.save(photo_path)
-                current_user.photo = f"uploads/{unique_filename}"
-            
+                nouvelle_photo = _sauver_photo(photo)
+                _supprimer_photo(current_user.photo)
+                current_user.photo = nouvelle_photo
+
             db.session.commit()
             flash("Profil mis à jour avec succès !", 'success')
+        except ValueError as e:
+            db.session.rollback()
+            flash(str(e), 'danger')
         except Exception as e:
             db.session.rollback()
             flash(f"Erreur lors de la mise à jour du profil : {str(e)}", 'danger')
@@ -128,12 +207,16 @@ def gestion_produits():
 @permission_required('gestion_produits')
 def ajouter_produit():
     try:
-        nom = request.form['nom']
-        description = request.form['description']
+        nom = request.form['nom'].strip()
+        description = request.form.get('description', '')
         prix = float(request.form['prix'])
         prix_achat = float(request.form['prix_achat'])
 
-        if Produits.query.filter_by(nom=nom).first():
+        if not nom or prix < 0 or prix_achat < 0:
+            flash("Nom obligatoire et prix positifs requis.", "danger")
+            return redirect(url_for('routes.gestion_produits'))
+
+        if Produits.query.filter(func.lower(Produits.nom) == nom.lower()).first():
             flash("Le produit existe déjà!", "danger")
             return redirect(url_for('routes.gestion_produits'))
 
@@ -175,7 +258,12 @@ def modifier_produit(id):
 def supprimer_produit():
     id = request.form['idDel']
     produit = Produits.query.get_or_404(id)
+    # Un produit déjà vendu ne peut pas être supprimé : les factures deviendraient illisibles
+    if Ventes.query.filter_by(produit_id=produit.id).first():
+        flash("Impossible de supprimer ce produit : il apparaît dans des factures existantes.", "danger")
+        return redirect(url_for('routes.gestion_produits'))
     try:
+        Panier.query.filter_by(produit_id=produit.id).delete()
         db.session.delete(produit)
         db.session.commit()
         flash("Produit supprimé avec succès!", "success")
@@ -185,6 +273,7 @@ def supprimer_produit():
     return redirect(url_for('routes.gestion_produits'))
 
 @bp.route('/search_produits')
+@login_required
 def search_produits():
     query = request.args.get('q', '').strip()
     if query:
@@ -219,6 +308,10 @@ def ajouter_transaction():
         description = request.form.get('description', '')
 
         produit = Produits.query.get_or_404(produit_id)
+
+        if quantite <= 0:
+            flash("La quantité doit être supérieure à 0.", "danger")
+            return redirect(url_for('routes.entrees_sorties'))
 
         if type_transaction == 'entree':
             produit.quantite += quantite
@@ -265,10 +358,16 @@ def api_ajouter_au_panier():
                 'message': 'La quantité et le prix doivent être positifs.'
             }), 400
         
+        if not Produits.query.get(produit_id):
+            return jsonify({
+                'success': False,
+                'message': 'Produit introuvable.'
+            }), 404
+
         session_id = request.cookies.get('session_id')
         if not session_id:
             session_id = str(uuid.uuid4())
-        
+
         # Vérifier si le produit existe déjà dans le panier
         item_existant = Panier.query.filter_by(
             produit_id=produit_id, 
@@ -338,6 +437,12 @@ def api_supprimer_du_panier(id):
     """API AJAX pour supprimer un produit du panier"""
     try:
         item_panier = Panier.query.get_or_404(id)
+        # Un vendeur ne peut retirer que les articles de son propre panier
+        if item_panier.session_id != request.cookies.get('session_id'):
+            return jsonify({
+                'success': False,
+                'message': "Cet article n'appartient pas à votre panier."
+            }), 403
         db.session.delete(item_panier)
         db.session.commit()
         
@@ -478,6 +583,9 @@ def api_finaliser_vente():
         type_livraison = data.get('type_livraison', 'sur_place')
         lieu_retrait = data.get('lieu_retrait', 'magasin')
 
+        if type_livraison not in TYPES_LIVRAISON:
+            return jsonify({'success': False, 'message': 'Type de livraison invalide.'}), 400
+
         # Détecter si c'est une vente à crédit
         paiement_credit_requested = (paiement_type == 'credit')
 
@@ -519,15 +627,16 @@ def api_finaliser_vente():
         montant_credit = 0
         
         if paiement_credit:
-            if montant_cash < 0 or montant_cash > montant_total:
+            if montant_cash < 0 or montant_cash > montant_total + EPSILON_MONTANT:
                 return jsonify({
                     'success': False,
                     'message': 'Le montant en cash doit être entre 0 et le montant total.'
                 }), 400
-            montant_credit = montant_total - montant_cash
+            montant_cash = min(montant_cash, montant_total)
+            montant_credit = round(montant_total - montant_cash, 2)
         else:
             montant_cash = montant_total
-        
+
         # ========== CRÉATION DE LA FACTURE ==========
         nouvelle_facture = Factures(
             client_id=client_id,
@@ -568,7 +677,16 @@ def api_finaliser_vente():
                     description=f"Vente sur place facture #{facture_id} à {nom_client}"
                 )
                 db.session.add(transaction)
-            
+            else:
+                # Livraison dépôt : le stock sera déduit à la livraison, mais on refuse
+                # dès maintenant une commande que le dépôt ne pourra pas honorer
+                if (produit.quantite_depot or 0) < item.quantite:
+                    db.session.rollback()
+                    return jsonify({
+                        'success': False,
+                        'message': f'Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot or 0}'
+                    }), 400
+
             # Créer la vente
             nouvelle_vente = Ventes(
                 produit_id=item.produit_id,
@@ -657,9 +775,7 @@ def api_finaliser_vente():
         
     except Exception as e:
         db.session.rollback()
-        print(f"ERREUR API finaliser_vente: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"ERREUR API finaliser_vente: {str(e)}")
         
         return jsonify({
             'success': False,
@@ -705,7 +821,8 @@ def details_facture(id):
     if facture.type_livraison == 'depot':
         livraison_info = LivraisonDepot.query.filter_by(facture_id=facture.id).first()
     
-    return render_template('details_facture.html', facture=facture, ventes=ventes, livraison_info=livraison_info)
+    # Le template details_facture.html n'existe pas : on affiche la facture imprimable
+    return render_template('imprimer_facture.html', facture=facture, ventes=ventes, livraison_info=livraison_info)
 
 @bp.route('/factures/<int:id>/details.json')
 @login_required
@@ -739,7 +856,7 @@ def details_facture_json(id):
     for vente in ventes:
         ventes_data.append({
             'produit_id': vente.produit_id,  # AJOUTÉ
-            'produit_nom': vente.produit.nom,
+            'produit_nom': vente.produit.nom if vente.produit else 'Produit supprimé',
             'quantite': vente.quantite,
             'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
             'montant_total': float(vente.montant_total)
@@ -776,10 +893,14 @@ def annuler_facture(facture_id):
         # Récupérer les ventes liées
         ventes = Ventes.query.filter_by(facture_id=facture_id).all()
         vente_ids = [v.id for v in ventes]
+        # Pour une vente dépôt, le stock n'a été retiré que si la livraison a eu lieu
+        depot_deja_livre = _livraison_effectuee(facture_id)
 
         # Restaurer le stock et supprimer les bénéfices
         for vente in ventes:
             produit = Produits.query.get_or_404(vente.produit_id)
+            if facture.type_livraison == 'depot' and not depot_deja_livre:
+                continue  # rien à restaurer : le stock dépôt n'avait pas bougé
             if facture.type_livraison == 'sur_place':
                 produit.quantite += vente.quantite
                 transaction = TransactionsProduit(
@@ -805,7 +926,6 @@ def annuler_facture(facture_id):
 
         # Supprimer les ventes
         Ventes.query.filter_by(facture_id=facture_id).delete(synchronize_session=False)
-        paiements = Paiements.query.filter_by(facture_id=facture_id).all()
         # Mettre à jour la livraison si nécessaire
         livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
         if livraison:
@@ -824,9 +944,7 @@ def annuler_facture(facture_id):
         flash(f"Facture #{facture_id} annulée et opérations inversées.", "success")
     except Exception as e:
         db.session.rollback()
-        print(f"ERREUR annulation facture: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"ERREUR annulation facture: {e}")
         flash(f"Erreur lors de l'annulation de la facture: {e}", "danger")
 
     return redirect(url_for('routes.factures'))
@@ -849,9 +967,26 @@ def modifier_facture():
         articles = data['articles']
         
         facture = Factures.query.get_or_404(facture_id)
-        
+
+        if facture.annulee:
+            return jsonify({'success': False, 'message': 'Une facture annulée ne peut pas être modifiée.'}), 400
+        if type_livraison not in TYPES_LIVRAISON:
+            return jsonify({'success': False, 'message': 'Type de livraison invalide.'}), 400
+        if not nom_client:
+            return jsonify({'success': False, 'message': 'Le nom du client est obligatoire.'}), 400
+        if not articles:
+            return jsonify({'success': False, 'message': 'La facture doit contenir au moins un article.'}), 400
+        for article in articles:
+            article['quantite'] = int(article['quantite'])
+            article['montant_total'] = float(article['montant_total'])
+            if article['quantite'] <= 0 or article['montant_total'] < 0:
+                return jsonify({'success': False, 'message': 'Quantités et montants doivent être positifs.'}), 400
+        if montant_cash < 0:
+            return jsonify({'success': False, 'message': 'Le montant cash ne peut pas être négatif.'}), 400
+
         # Récupérer les ventes existantes
         ventes_existantes = Ventes.query.filter_by(facture_id=facture_id).all()
+        depot_deja_livre = _livraison_effectuee(facture_id)
         
         # Sauvegarder l'ancien état pour référence
         ancien_etat = {
@@ -874,14 +1009,15 @@ def modifier_facture():
         
         # Calculer les nouveaux montants de paiement
         if mode_paiement == 'credit':
-            if montant_cash > nouveau_montant_total:
+            if montant_cash > nouveau_montant_total + EPSILON_MONTANT:
                 return jsonify({
                     'success': False,
                     'message': f'Le montant cash ({montant_cash}) ne peut pas dépasser le montant total ({nouveau_montant_total})'
                 })
             
-            nouveau_montant_credit = nouveau_montant_total - montant_cash
-            paiement_credit = True
+            montant_cash = min(montant_cash, nouveau_montant_total)
+            nouveau_montant_credit = round(nouveau_montant_total - montant_cash, 2)
+            paiement_credit = nouveau_montant_credit > 0
         else:
             montant_cash = nouveau_montant_total
             nouveau_montant_credit = 0
@@ -908,8 +1044,8 @@ def modifier_facture():
                         description=f"Annulation modification facture #{facture_id}"
                     )
                     db.session.add(transaction)
-                else:
-                    # Ajouter au stock dépôt
+                elif depot_deja_livre:
+                    # Ajouter au stock dépôt (seulement si la marchandise était déjà sortie)
                     produit.quantite_depot += vente.quantite
                     
                     # Enregistrer la transaction de dépôt
@@ -921,8 +1057,11 @@ def modifier_facture():
                     )
                     db.session.add(transaction_depot)
             
-            # 2. Supprimer les anciennes ventes
-            Ventes.query.filter_by(facture_id=facture_id).delete()
+            # 2. Supprimer les anciennes ventes (et leurs bénéfices éventuels)
+            anciens_ids = [v.id for v in ventes_existantes]
+            if anciens_ids:
+                Benefices.query.filter(Benefices.vente_id.in_(anciens_ids)).delete(synchronize_session=False)
+            Ventes.query.filter_by(facture_id=facture_id).delete(synchronize_session=False)
             
             # 3. Ajouter les nouvelles ventes
             for article in articles:
@@ -945,20 +1084,10 @@ def modifier_facture():
                     )
                     db.session.add(transaction)
                 else:
-                    if produit.quantite_depot < article['quantite']:
-                        raise ValueError(f"Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot}")
-                    
-                    # Déduire du stock dépôt
-                    produit.quantite_depot -= article['quantite']
-                    
-                    # Enregistrer la transaction de dépôt
-                    transaction_depot = TransactionDepot(
-                        produit_id=produit.id,
-                        type_transaction='sortie',
-                        quantite=article['quantite'],
-                        description=f"Vente modifiée facture #{facture_id} à {nom_client}"
-                    )
-                    db.session.add(transaction_depot)
+                    # Comme pour une nouvelle vente : on vérifie la disponibilité, la
+                    # déduction du stock dépôt se fera quand la livraison sera « livree »
+                    if (produit.quantite_depot or 0) < article['quantite']:
+                        raise ValueError(f"Stock DÉPÔT insuffisant pour {produit.nom}! Stock: {produit.quantite_depot or 0}")
                 
                 # Créer la nouvelle vente
                 nouvelle_vente = Ventes(
@@ -988,13 +1117,21 @@ def modifier_facture():
                 pass
             
             # 5. Mettre à jour la livraison si nécessaire
-            if type_livraison == 'depot':
-                livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
+            livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
+            if type_livraison != 'depot':
+                # Passage en vente sur place : la commande dépôt n'a plus lieu d'être
+                if livraison and livraison.statut != 'annulee':
+                    livraison.statut = 'annulee'
+                    livraison.date_preparation = None
+                    livraison.date_livree = None
+            else:
                 if livraison:
                     livraison.lieu_retrait = lieu_retrait
-                    # Réinitialiser le statut si la livraison était déjà livrée
-                    if livraison.statut == 'livree':
+                    # Réinitialiser le statut : le stock a été restauré plus haut et
+                    # sera de nouveau déduit à la prochaine livraison
+                    if livraison.statut in ('livree', 'annulee'):
                         livraison.statut = 'en_attente'
+                        livraison.date_preparation = None
                         livraison.date_livree = None
                 else:
                     # Créer une nouvelle livraison
@@ -1027,9 +1164,7 @@ def modifier_facture():
         
     except Exception as e:
         db.session.rollback()
-        print(f"ERREUR modification facture: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        logger.exception(f"ERREUR modification facture: {str(e)}")
         
         return jsonify({
             'success': False,
@@ -1127,13 +1262,14 @@ def paiement_client():
             return redirect(url_for('routes.factures_credit'))
 
         total_credit = sum(f.montant_credit for f in factures)
-        if montant_paye > total_credit:
+        if montant_paye > total_credit + EPSILON_MONTANT:
             flash("Le montant payé ne peut pas dépasser le total de la dette du client.", "danger")
             return redirect(url_for('routes.factures_credit'))
 
+        montant_paye = min(montant_paye, total_credit)
         montant_restant = montant_paye
         created_payments = []
-        while montant_restant > 0 and factures:
+        while montant_restant > EPSILON_MONTANT and factures:
             facture = factures[0]
             payement_sur_facture = min(facture.montant_credit, montant_restant)
             nouveau_paiement = Paiements(
@@ -1147,8 +1283,8 @@ def paiement_client():
             created_payments.append(nouveau_paiement.id)
 
             facture.montant_cash += payement_sur_facture
-            facture.montant_credit -= payement_sur_facture
-            if facture.montant_credit <= 0:
+            facture.montant_credit = round(facture.montant_credit - payement_sur_facture, 2)
+            if facture.montant_credit <= EPSILON_MONTANT:
                 facture.montant_credit = 0
                 facture.paiement_credit = False
                 factures.pop(0)
@@ -1242,7 +1378,11 @@ def marquer_facture_payee():
             flash("Cette facture n'a pas été en crédit!", "danger")
             return redirect(url_for('routes.factures_credit'))
         
-        if montant_paye > facture.montant_credit:
+        if facture.annulee:
+            flash("Cette facture est annulée.", "danger")
+            return redirect(url_for('routes.factures_credit'))
+
+        if montant_paye > facture.montant_credit + EPSILON_MONTANT:
             flash("Le montant payé ne peut pas dépasser le montant restant!", "danger")
             return redirect(url_for('routes.factures_credit'))
         
@@ -1262,11 +1402,13 @@ def marquer_facture_payee():
         paiement_id = nouveau_paiement.id
         
         # Mettre à jour les montants de la facture
+        montant_paye = min(montant_paye, facture.montant_credit)
+        nouveau_paiement.montant = montant_paye
         facture.montant_cash += montant_paye
-        facture.montant_credit -= montant_paye
-        
+        facture.montant_credit = round(facture.montant_credit - montant_paye, 2)
+
         # Si le crédit est entièrement payé, on peut changer paiement_credit
-        if facture.montant_credit <= 0:
+        if facture.montant_credit <= EPSILON_MONTANT:
             facture.montant_credit = 0
             facture.paiement_credit = False
             flash(f"Facture #{facture_id} complètement payée!", "success")
@@ -1443,6 +1585,7 @@ def factures():
     # Aujourd'hui
     today = datetime.now().date()
     factures_aujourdhui = Factures.query.filter(
+        Factures.annulee == False,
         db.func.date(Factures.date_facture) == today
     ).all()
     
@@ -1450,6 +1593,7 @@ def factures():
     start_of_week = today - timedelta(days=today.weekday())
     end_of_week = start_of_week + timedelta(days=6)
     factures_semaine = Factures.query.filter(
+        Factures.annulee == False,
         db.func.date(Factures.date_facture) >= start_of_week,
         db.func.date(Factures.date_facture) <= end_of_week
     ).all()
@@ -1459,6 +1603,7 @@ def factures():
     next_month = today.replace(day=28) + timedelta(days=4)
     end_of_month = next_month - timedelta(days=next_month.day)
     factures_mois = Factures.query.filter(
+        Factures.annulee == False,
         db.func.date(Factures.date_facture) >= start_of_month,
         db.func.date(Factures.date_facture) <= end_of_month
     ).all()
@@ -1768,8 +1913,12 @@ def ajouter_transaction_depot():
 
         produit = Produits.query.get_or_404(produit_id)
 
+        if quantite <= 0:
+            flash("La quantité doit être supérieure à 0.", "danger")
+            return redirect(url_for('routes.gestion_transactions_depot'))
+
         if type_transaction == 'entree':
-            produit.quantite_depot += quantite
+            produit.quantite_depot = (produit.quantite_depot or 0) + quantite
         elif type_transaction == 'sortie':
             if produit.quantite_depot < quantite:
                 flash("Quantité insuffisante en stock!", "danger")
@@ -1857,6 +2006,9 @@ def gestion_caisse():
             montant = float(request.form['montant'])
             description = request.form.get('description', '')
 
+            if type_transaction not in ('entree', 'sortie') or montant <= 0:
+                raise ValueError("Type de transaction invalide ou montant non positif.")
+
             nouvelle_transaction = Caisse(
                 type_transaction=type_transaction,
                 montant=montant,
@@ -1888,6 +2040,9 @@ def gestion_compte_bancaire():
             montant = float(request.form['montant'])
             description = request.form.get('description', '')
 
+            if type_transaction not in ('depot', 'retrait') or montant <= 0:
+                raise ValueError("Type de transaction invalide ou montant non positif.")
+
             nouvelle_transaction = CompteBancaire(
                 type_transaction=type_transaction,
                 montant=montant,
@@ -1913,7 +2068,7 @@ DEFAULT_ROLE_PERMISSIONS = {
     'admin': [
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
         'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 'voir_benefice', 
-        'gestion_depenses_ordinaires', 'gestion_depenses_recurentes', 'voir_historique_vente', 
+        'gestion_depenses_ordinaires', 'gestion_depenses_recurrentes', 'voir_historique_vente', 
         'gestion_transactions_stock_boutique', 'gestion_livraisons'  # NOUVEAU
     ],
     'Financier': [
@@ -1938,7 +2093,7 @@ def gestion_utilisateurs():
     all_permissions = [
         'gestion_utilisateurs', 'gestion_produits', 'gestion_ventes', 'gestion_banque', 'gestion_caise', 
         'gestion_depot', 'voir_stock_depot', 'voir_stock_boutique', 'voir_stock_globale', 'voir_benefice', 
-        'gestion_depenses_ordinaires', 'gestion_depenses_recurentes', 'voir_historique_vente', 
+        'gestion_depenses_ordinaires', 'gestion_depenses_recurrentes', 'voir_historique_vente', 
         'gestion_transactions_stock_boutique', 'gestion_livraisons'  # NOUVEAU
     ]
 
@@ -1950,7 +2105,7 @@ def gestion_utilisateurs():
                 firstname = request.form['firstname']
                 lastname = request.form['lastname']
                 role = request.form['role']
-                photo = request.files['photo']
+                photo = request.files.get('photo')
 
                 if User.query.filter_by(email=email).first():
                     flash("Cet email est déjà enregistré.", 'danger')
@@ -1966,11 +2121,7 @@ def gestion_utilisateurs():
                     new_user.set_password(password)
 
                     if photo and photo.filename != '':
-                        filename = secure_filename(photo.filename)
-                        unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                        photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-                        photo.save(photo_path)
-                        new_user.photo = f"uploads/{unique_filename}"
+                        new_user.photo = _sauver_photo(photo)
 
                     db.session.add(new_user)
                     db.session.commit()
@@ -1993,18 +2144,11 @@ def gestion_utilisateurs():
                 if request.form['password']:
                     user.set_password(request.form['password'])
 
-                photo = request.files['photo']
+                photo = request.files.get('photo')
                 if photo and photo.filename != '':
-                    if user.photo:
-                        old_photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.photo.split('/')[-1])
-                        if os.path.exists(old_photo_path):
-                            os.remove(old_photo_path)
-
-                    filename = secure_filename(photo.filename)
-                    unique_filename = f"{uuid.uuid4().hex}_{filename}"
-                    photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-                    photo.save(photo_path)
-                    user.photo = f"uploads/{unique_filename}"
+                    nouvelle_photo = _sauver_photo(photo)
+                    _supprimer_photo(user.photo)
+                    user.photo = nouvelle_photo
 
                 db.session.commit()
                 flash("Utilisateur modifié avec succès!", 'success')
@@ -2017,11 +2161,12 @@ def gestion_utilisateurs():
                 user_id = request.form['user_id']
                 user = User.query.get_or_404(user_id)
 
-                if user.photo:
-                    photo_path = os.path.join(current_app.config['UPLOAD_FOLDER'], user.photo.split('/')[-1])
-                    if os.path.exists(photo_path):
-                        os.remove(photo_path)
+                if user.id == current_user.id:
+                    raise ValueError("Vous ne pouvez pas supprimer votre propre compte.")
+                if user.is_admin() and User.query.filter_by(role='admin').count() <= 1:
+                    raise ValueError("Impossible de supprimer le dernier administrateur.")
 
+                _supprimer_photo(user.photo)
                 db.session.delete(user)
                 db.session.commit()
                 flash("Utilisateur supprimé avec succès!", 'success')
@@ -2059,25 +2204,29 @@ def produits_en_route():
 @login_required
 @permission_required('gestion_produits')
 def ajouter_produit_en_route():
-    if request.method == 'POST':
-        produit_id = request.form['produit_id']
-        quantite = request.form['quantite']
+    if request.method == 'GET':
+        # L'ajout se fait depuis la modale de la page « produits en route »
+        return redirect(url_for('routes.produits_en_route'))
+    try:
+        produit = Produits.query.get_or_404(int(request.form['produit_id']))
+        quantite = int(request.form['quantite'])
         prix_achat = request.form.get('prix_achat')
-        produit_en_route = ProduitsEnRoute(
-            produit_id=produit_id,
+        prix_achat = float(prix_achat) if prix_achat not in (None, '') else None
+        if quantite <= 0:
+            raise ValueError("La quantité doit être supérieure à 0.")
+
+        db.session.add(ProduitsEnRoute(
+            produit_id=produit.id,
             quantite=quantite,
             prix_achat=prix_achat
-        )
-        db.session.add(produit_en_route)
-
-        produit = Produits.query.get_or_404(produit_id)
-        produit.en_route += int(quantite)
+        ))
+        produit.en_route = (produit.en_route or 0) + quantite
         db.session.commit()
-
-        flash('Produit en route ajouté !')
-        return redirect(url_for('routes.produits_en_route'))
-    produits = Produits.query.order_by(Produits.nom.asc()).all()
-    return render_template('ajouter_produit_en_route.html', produits=produits)
+        flash('Produit en route ajouté !', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de l'ajout du produit en route : {e}", 'danger')
+    return redirect(url_for('routes.produits_en_route'))
 
 @bp.route('/receptionner_produit_en_route/<int:id>', methods=['POST'])
 @login_required
@@ -2085,33 +2234,35 @@ def ajouter_produit_en_route():
 def receptionner_produit_en_route(id):
     produit_en_route = ProduitsEnRoute.query.get_or_404(id)
     produit = Produits.query.get_or_404(produit_en_route.produit_id)
-    destination = request.form['destination']
+    destination = request.form.get('destination', 'magasin')
+
+    if produit_en_route.statut == 'arrivé':
+        flash("Ce produit a déjà été réceptionné.", 'warning')
+        return redirect(url_for('routes.produits_en_route'))
 
     try:
         produit_en_route.statut = 'arrivé'
-        produit.en_route = max(0, produit.en_route - produit_en_route.quantite)
+        produit.en_route = max(0, (produit.en_route or 0) - produit_en_route.quantite)
 
         if destination == 'depot':
-            produit.quantite_depot += produit_en_route.quantite
-            transaction = TransactionDepot(
+            produit.quantite_depot = (produit.quantite_depot or 0) + produit_en_route.quantite
+            db.session.add(TransactionDepot(
                 produit_id=produit.id,
                 quantite=produit_en_route.quantite,
                 type_transaction='entree',
                 description='Arrivée produit en route'
-            )
-            db.session.add(transaction)
+            ))
         else:
             produit.quantite += produit_en_route.quantite
-            transaction = TransactionsProduit(
+            db.session.add(TransactionsProduit(
                 produit_id=produit.id,
                 type='entree',
                 quantite=produit_en_route.quantite,
                 description='Arrivée produit en route'
-            )
-            db.session.add(transaction)
+            ))
 
         db.session.commit()
-        flash('Produit réceptionné et transféré avec succès !')
+        flash('Produit réceptionné et transféré avec succès !', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f"Erreur lors de la réception : {e}", "danger")
@@ -2121,16 +2272,38 @@ def receptionner_produit_en_route(id):
 @login_required
 @permission_required('gestion_produits')
 def modifier_produit_en_route(id):
-    produit_en_route = ProduitsEnRoute.query.get_or_404(id)
-    if request.method == 'POST':
-        produit_en_route.quantite = request.form['quantite']
-        produit_en_route.prix_achat = request.form.get('prix_achat')
-        produit_en_route.statut = request.form.get('statut', produit_en_route.statut)
-        db.session.commit()
-        flash('Produit en route modifié !')
+    if request.method == 'GET':
         return redirect(url_for('routes.produits_en_route'))
-    produits = Produits.query.all()
-    return render_template('modifier_produit_en_route.html', produit_en_route=produit_en_route, produits=produits)
+    produit_en_route = ProduitsEnRoute.query.get_or_404(id)
+    if produit_en_route.statut == 'arrivé':
+        flash("Un produit déjà réceptionné ne peut plus être modifié.", 'warning')
+        return redirect(url_for('routes.produits_en_route'))
+    try:
+        nouvelle_quantite = int(request.form['quantite'])
+        if nouvelle_quantite <= 0:
+            raise ValueError("La quantité doit être supérieure à 0.")
+        nouveau_produit = Produits.query.get_or_404(int(request.form.get('produit_id', produit_en_route.produit_id)))
+        ancien_produit = Produits.query.get_or_404(produit_en_route.produit_id)
+
+        # Mettre à jour le compteur « en route » des produits concernés
+        ancien_produit.en_route = max(0, (ancien_produit.en_route or 0) - produit_en_route.quantite)
+        nouveau_produit.en_route = (nouveau_produit.en_route or 0) + nouvelle_quantite
+
+        prix_achat = request.form.get('prix_achat')
+        produit_en_route.produit_id = nouveau_produit.id
+        produit_en_route.quantite = nouvelle_quantite
+        produit_en_route.prix_achat = float(prix_achat) if prix_achat not in (None, '') else None
+        db.session.commit()
+
+        # Passer au statut « arrivé » doit passer par la réception (qui met le stock à jour)
+        if request.form.get('statut') == 'arrivé':
+            flash("Produit modifié. Utilisez le bouton « Réceptionner » pour l'enregistrer comme arrivé et mettre le stock à jour.", 'info')
+        else:
+            flash('Produit en route modifié !', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de la modification : {e}", 'danger')
+    return redirect(url_for('routes.produits_en_route'))
 
 # ==================== ROUTES DE GESTION DES LIVRAISONS ====================
 @bp.route('/gestion_livraisons')
@@ -2202,7 +2375,29 @@ def update_statut_livraison(id):
         
         if nouveau_statut not in ['en_attente', 'en_preparation', 'livree', 'annulee']:
             return jsonify({'success': False, 'message': 'Statut invalide'}), 400
-        
+
+        ancien_statut = livraison.statut
+        if ancien_statut == nouveau_statut:
+            return jsonify({'success': False, 'message': f'La livraison est déjà au statut « {nouveau_statut} ».'}), 400
+
+        facture_liee = Factures.query.get(livraison.facture_id)
+        if facture_liee and facture_liee.annulee and nouveau_statut != 'annulee':
+            return jsonify({'success': False, 'message': 'La facture liée est annulée : livraison impossible.'}), 400
+
+        # Une livraison déjà livrée qu'on fait revenir en arrière : on remet le stock au dépôt
+        if ancien_statut == 'livree':
+            for vente in Ventes.query.filter_by(facture_id=livraison.facture_id).all():
+                produit = Produits.query.get_or_404(vente.produit_id)
+                produit.quantite_depot = (produit.quantite_depot or 0) + vente.quantite
+                db.session.add(TransactionDepot(
+                    produit_id=produit.id,
+                    type_transaction='entree',
+                    quantite=vente.quantite,
+                    description=f"Retour livraison (statut {nouveau_statut}) - Facture #{livraison.facture_id}"
+                ))
+            livraison.date_livree = None
+            db.session.flush()
+
         # Vérifier le stock si on passe en préparation ou livrée
         if nouveau_statut in ['en_preparation', 'livree']:
             ventes = Ventes.query.filter_by(facture_id=livraison.facture_id).all()
@@ -2210,7 +2405,8 @@ def update_statut_livraison(id):
             for vente in ventes:
                 produit = Produits.query.get_or_404(vente.produit_id)
                 
-                if produit.quantite_depot < vente.quantite:
+                if (produit.quantite_depot or 0) < vente.quantite:
+                    db.session.rollback()
                     return jsonify({
                         'success': False,
                         'message': f'Stock DÉPÔT insuffisant pour {produit.nom}. Disponible: {produit.quantite_depot}, Requis: {vente.quantite}'
@@ -2285,55 +2481,48 @@ def livraisons_client():
 def telecharger_base_donnees():
     try:
         db_uri = current_app.config.get('SQLALCHEMY_DATABASE_URI')
-
-        if db_uri.startswith('sqlite:///'):
-            db_file = db_uri.replace('sqlite:///', '')
-
-            if not os.path.exists(db_file):
-                flash("Fichier de base de données introuvable!", "danger")
-                return redirect(url_for('routes.gestion_utilisateurs'))
-
-            temp_dir = os.path.join('/tmp', 'backups')
-            os.makedirs(temp_dir, exist_ok=True)
-
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_folder = os.path.join(temp_dir, f"backup_{timestamp}")
-            os.makedirs(backup_folder, exist_ok=True)
-
-            sqlite_filename = f"backup_{timestamp}.db"
-            sqlite_path = os.path.join(backup_folder, sqlite_filename)
-            shutil.copy(db_file, sqlite_path)
-
-            sql_filename = f"backup_{timestamp}.sql"
-            sql_path = os.path.join(backup_folder, sql_filename)
-
-            conn = sqlite3.connect(db_file)
-            with open(sql_path, 'w', encoding='utf-8') as f:
-                for line in conn.iterdump():
-                    f.write(f"{line}\n")
-            conn.close()
-
-            zip_filename = f"backup_base_donnees_{timestamp}.zip"
-            zip_path = os.path.join(temp_dir, zip_filename)
-
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(sqlite_path, arcname=sqlite_filename)
-                zipf.write(sql_path, arcname=sql_filename)
-                zipf.writestr('README.txt', f"Sauvegarde créée le {datetime.now()}")
-
-            shutil.rmtree(backup_folder)
-
-            return send_file(
-                zip_path,
-                as_attachment=True,
-                download_name=zip_filename,
-                mimetype='application/zip'
-            )
-        else:
+        if not db_uri.startswith('sqlite:///'):
             flash("Type de base de données non supporté!", "danger")
             return redirect(url_for('routes.gestion_utilisateurs'))
 
+        db_file = db_uri.replace('sqlite:///', '')
+        if not os.path.exists(db_file):
+            flash("Fichier de base de données introuvable!", "danger")
+            return redirect(url_for('routes.gestion_utilisateurs'))
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        sqlite_filename = f"backup_{timestamp}.db"
+        sql_filename = f"backup_{timestamp}.sql"
+        zip_filename = f"backup_base_donnees_{timestamp}.zip"
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            sqlite_path = os.path.join(temp_dir, sqlite_filename)
+            # API de sauvegarde SQLite : copie cohérente même si l'application écrit en même temps
+            source = sqlite3.connect(db_file)
+            destination = sqlite3.connect(sqlite_path)
+            try:
+                source.backup(destination)
+                sql_dump = "\n".join(destination.iterdump())
+            finally:
+                destination.close()
+                source.close()
+
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.write(sqlite_path, arcname=sqlite_filename)
+                zipf.writestr(sql_filename, sql_dump)
+                zipf.writestr('README.txt', f"Sauvegarde créée le {datetime.now()}")
+        zip_buffer.seek(0)
+
+        return send_file(
+            zip_buffer,
+            as_attachment=True,
+            download_name=zip_filename,
+            mimetype='application/zip'
+        )
+
     except Exception as e:
+        logger.exception("Erreur lors de la sauvegarde de la base")
         flash(f"Erreur lors du téléchargement: {str(e)}", "danger")
         return redirect(url_for('routes.gestion_utilisateurs'))
 

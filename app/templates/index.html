@@ -1,177 +1,267 @@
 {% extends "layout.html" %}
 
-{% block title %}Accueil - Gestion des Appartements{% endblock %}
+{% block title %}Tableau de bord - MKM Shop{% endblock %}
 
 {% block content %}
-<div class="container">
-    <!-- Bannière en haut de la page -->
-    <div class="jumbotron mt-5 shadow rounded">
-        <h1 class="display-4">Bienvenue dans votre espace de gestion</h1>
-        <p class="lead">Gérez les opérations de votre entreprise en toute simplicité.</p>
-        <hr class="my-4">
-        <p>Utilisez les sections ci-dessous pour accéder aux différentes fonctionnalités de gestion.</p>
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="flash-stack">
+        {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+            </div>
+        {% endfor %}
     </div>
+    {% endif %}
+{% endwith %}
 
-    <!-- Grille pour les sections -->
-    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4 mt-4">
-        <!-- Section pour les administrateurs -->
-        {% if current_user.has_permission('gestion_utilisateurs') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h2 class="h5"><i class="fas fa-users-cog me-2"></i> Gestion des Utilisateurs</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion des utilisateurs. Vous pouvez ajouter, modifier ou supprimer des utilisateurs.</p>
-                    <a href="/gestion_utilisateurs" class="btn btn-primary">
-                        <i class="fas fa-users me-2"></i> Gérer les Utilisateurs
-                    </a>
-                </div>
-            </div>
+<!-- Bannière d'accueil -->
+<div class="welcome mb-4">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div>
+            <h1><span id="salutation">Bonjour</span>{% if current_user.firstname %}, {{ current_user.firstname }}{% endif %}</h1>
+            <p>Voici un aperçu de l'activité de votre boutique aujourd'hui.</p>
         </div>
-        {% endif %}
-
-        <!-- Section pour la gestion des produits -->
-        {% if current_user.has_permission('gestion_produits') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-success text-white">
-                    <h2 class="h5"><i class="fas fa-boxes me-2"></i> Gestion des Produits</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion des produits. Vous pouvez ajouter, modifier ou supprimer des produits.</p>
-                    <a href="/gestion_produits" class="btn btn-success">
-                        <i class="fas fa-edit me-2"></i> Gérer les Produits
-                    </a>
-                </div>
-            </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if current_user.has_permission('gestion_ventes') %}
+                <a href="/ventes" class="btn btn-light"><i class="fas fa-plus me-1"></i> Nouvelle vente</a>
+            {% endif %}
+            {% if current_user.has_permission('voir_historique_vente') %}
+                <a href="/factures" class="btn btn-ghost"><i class="fas fa-file-invoice me-1"></i> Factures</a>
+            {% endif %}
         </div>
-        {% endif %}
-
-        <!-- Section pour la gestion des ventes -->
-        {% if current_user.has_permission('gestion_ventes') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-info text-white">
-                    <h2 class="h5"><i class="fas fa-shopping-cart me-2"></i> Gestion des Ventes</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion des ventes. Vous pouvez créer de nouvelles ventes et consulter l'historique.</p>
-                    <a href="/ventes" class="btn btn-info">
-                        <i class="fas fa-cart-plus me-2"></i> Gérer les Ventes
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Section pour la gestion des dépenses -->
-        {% if current_user.has_permission('gestion_depenses_ordinaires') or current_user.has_permission('gestion_depenses_recurrentes') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-warning text-dark">
-                    <h2 class="h5"><i class="fas fa-money-bill-wave me-2"></i> Gestion des Dépenses</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion des dépenses. Vous pouvez ajouter, modifier ou supprimer des dépenses.</p>
-                    <div class="d-grid gap-2">
-                        {% if current_user.has_permission('gestion_depenses_ordinaires') %}
-                        <a href="/depenses_ordinaires" class="btn btn-warning">
-                            <i class="fas fa-list me-2"></i> Dépenses Ordinaires
-                        </a>
-                        {% endif %}
-                        {% if current_user.has_permission('gestion_depenses_recurrentes') %}
-                        <a href="/depenses_recurrentes" class="btn btn-warning">
-                            <i class="fas fa-list me-2"></i> Dépenses Récurrentes
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Section pour la gestion du dépôt -->
-        {% if current_user.has_permission('gestion_depot') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-secondary text-white">
-                    <h2 class="h5"><i class="fas fa-warehouse me-2"></i> Gestion du Dépôt</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion du dépôt. Vous pouvez gérer les transactions et consulter le stock.</p>
-                    <div class="d-grid gap-2">
-                        <a href="/gestion_transactions_depot" class="btn btn-secondary">
-                            <i class="fas fa-exchange-alt me-2"></i> Transactions
-                        </a>
-                        <a href="/stock_depot" class="btn btn-secondary">
-                            <i class="fas fa-boxes me-2"></i> Stock au Dépôt
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Section pour la gestion de la caisse -->
-        {% if current_user.has_permission('gestion_caise') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-danger text-white">
-                    <h2 class="h5"><i class="fas fa-cash-register me-2"></i> Gestion de la Caisse</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion de la caisse. Vous pouvez enregistrer des entrées et sorties d'argent.</p>
-                    <a href="/gestion_caisse" class="btn btn-danger">
-                        <i class="fas fa-money-bill me-2"></i> Gérer la Caisse
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Section pour la gestion du compte bancaire -->
-        {% if current_user.has_permission('gestion_banque') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-dark text-white">
-                    <h2 class="h5"><i class="fas fa-piggy-bank me-2"></i> Gestion du Compte Bancaire</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès à la gestion du compte bancaire. Vous pouvez enregistrer des dépôts et retraits.</p>
-                    <a href="/gestion_compte_bancaire" class="btn btn-dark">
-                        <i class="fas fa-university me-2"></i> Gérer le Compte
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Section pour les rapports -->
-        {% if current_user.has_permission('voir_benefice') or current_user.has_permission('voir_historique_vente') %}
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h2 class="h5"><i class="fas fa-chart-line me-2"></i> Rapports</h2>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Vous avez accès aux rapports de l'entreprise.</p>
-                    <div class="d-grid gap-2">
-                        {% if current_user.has_permission('voir_benefice') %}
-                        <a href="/benefices" class="btn btn-primary">
-                            <i class="fas fa-chart-line me-2"></i> Bénéfices
-                        </a>
-                        {% endif %}
-                        {% if current_user.has_permission('voir_historique_vente') %}
-                        <a href="/historique_ventes" class="btn btn-primary">
-                            <i class="fas fa-history me-2"></i> Historique des Ventes
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
 </div>
+
+<!-- Indicateurs -->
+<div class="row g-3 mb-4">
+    {% if d.ventes_jour is defined %}
+    <div class="col-6 col-lg-4">
+        <div class="card kpi kpi-1 h-100">
+            <div class="card-body">
+                <i class="fas fa-cash-register"></i>
+                <small>Ventes du jour</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(d.ca_jour).replace(',', ' ') }} $</div>
+                <div class="small mt-1">{{ d.ventes_jour }} facture{{ 's' if d.ventes_jour > 1 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-4">
+        <div class="card kpi kpi-4 h-100">
+            <div class="card-body">
+                <i class="fas fa-calendar"></i>
+                <small>Chiffre d'affaires du mois</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(d.ca_mois).replace(',', ' ') }} $</div>
+                <div class="small mt-1">{{ d.ventes_mois }} facture{{ 's' if d.ventes_mois > 1 }}</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-4">
+        <a href="/factures_credit" class="card kpi kpi-6 h-100 text-reset">
+            <div class="card-body">
+                <i class="fas fa-hand-holding-dollar"></i>
+                <small>Crédits à encaisser</small>
+                <div class="kpi-value">{{ "{:,.2f}".format(d.credit_total).replace(',', ' ') }} $</div>
+                <div class="small mt-1">{{ d.credit_factures }} facture{{ 's' if d.credit_factures > 1 }} en attente</div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if d.stock_bas_count is defined %}
+    <div class="col-6 col-lg-4">
+        <a href="/stock_boutique" class="card kpi kpi-5 h-100 text-reset">
+            <div class="card-body">
+                <i class="fas fa-triangle-exclamation"></i>
+                <small>Stock boutique bas</small>
+                <div class="kpi-value">{{ d.stock_bas_count }}</div>
+                <div class="small mt-1">produit{{ 's' if d.stock_bas_count > 1 }} à ≤ {{ d.seuil_stock_bas }} unités</div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    {% if d.livraisons_attente is defined %}
+    <div class="col-6 col-lg-4">
+        <a href="/gestion_livraisons" class="card kpi kpi-3 h-100 text-reset">
+            <div class="card-body">
+                <i class="fas fa-truck"></i>
+                <small>Livraisons à préparer</small>
+                <div class="kpi-value">{{ d.livraisons_attente }}</div>
+                <div class="small mt-1">en attente ou en préparation</div>
+            </div>
+        </a>
+    </div>
+    {% endif %}
+
+    <div class="col-6 col-lg-4">
+        <div class="card kpi kpi-2 h-100">
+            <div class="card-body">
+                <i class="fas fa-cubes"></i>
+                <small>Produits au catalogue</small>
+                <div class="kpi-value">{{ d.total_produits }}</div>
+                <div class="small mt-1">références actives</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- Colonne principale -->
+    <div class="col-12 col-xl-8 d-flex flex-column gap-4">
+        {% if d.dernieres_factures is defined %}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-file-invoice text-primary me-2"></i>Dernières ventes</h5>
+                {% if current_user.has_permission('voir_historique_vente') %}
+                <a href="/factures" class="btn btn-sm btn-outline-secondary">Tout voir</a>
+                {% endif %}
+            </div>
+            {% if d.dernieres_factures %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr><th>N°</th><th>Client</th><th>Date</th><th>Paiement</th><th class="text-end">Montant</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for f in d.dernieres_factures %}
+                        <tr>
+                            <td><a href="{{ url_for('routes.details_facture', id=f.id) }}" target="_blank" class="fw-semibold">#{{ f.id }}</a></td>
+                            <td>{{ f.nom_client }}</td>
+                            <td class="text-muted">{{ f.date_facture.strftime('%d/%m/%Y %H:%M') if f.date_facture }}</td>
+                            <td>
+                                {% if f.montant_credit and f.montant_credit > 0 %}
+                                    <span class="badge bg-warning">Crédit · reste {{ "%.2f"|format(f.montant_credit) }} $</span>
+                                {% elif f.a_ete_en_credit %}
+                                    <span class="badge bg-success">Crédit soldé</span>
+                                {% else %}
+                                    <span class="badge bg-primary">Comptant</span>
+                                {% endif %}
+                                {% if f.type_livraison == 'depot' %}<span class="badge bg-secondary ms-1"><i class="fas fa-warehouse me-1"></i>Dépôt</span>{% endif %}
+                            </td>
+                            <td class="text-end fw-semibold">{{ "%.2f"|format(f.montant_total) }} $</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="empty-state"><i class="fas fa-receipt d-block"></i>Aucune vente enregistrée pour le moment.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Accès rapides -->
+        <div>
+            <h3 class="section-title">Accès rapides</h3>
+            <div class="row g-3">
+                {% set liens = [] %}
+                {% if current_user.has_permission('gestion_ventes') %}
+                    {% set _ = liens.append(('/ventes', 'fa-cash-register', 'Nouvelle vente', 'Panier et facturation', 'kpi-1')) %}
+                    {% set _ = liens.append(('/gestion_clients', 'fa-user-group', 'Clients fidèles', 'Comptes et historique', 'kpi-2')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_produits') %}
+                    {% set _ = liens.append(('/gestion_produits', 'fa-cubes', 'Produits', 'Catalogue et prix', 'kpi-4')) %}
+                    {% set _ = liens.append(('/entrees_sorties', 'fa-right-left', 'Entrées / sorties', 'Mouvements boutique', 'kpi-3')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_depot') %}
+                    {% set _ = liens.append(('/gestion_livraisons', 'fa-truck', 'Livraisons', 'Commandes du dépôt', 'kpi-3')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_caise') %}
+                    {% set _ = liens.append(('/gestion_caisse', 'fa-wallet', 'Caisse', 'Entrées et sorties d\'argent', 'kpi-5')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_banque') %}
+                    {% set _ = liens.append(('/gestion_compte_bancaire', 'fa-university', 'Banque', 'Dépôts et retraits', 'kpi-2')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_depenses_ordinaires') %}
+                    {% set _ = liens.append(('/depenses_ordinaires', 'fa-receipt', 'Dépenses', 'Charges courantes', 'kpi-6')) %}
+                {% endif %}
+                {% if current_user.has_permission('voir_benefice') %}
+                    {% set _ = liens.append(('/benefices', 'fa-chart-line', 'Bénéfices', 'Marges et résultat', 'kpi-4')) %}
+                {% endif %}
+                {% if current_user.has_permission('gestion_utilisateurs') %}
+                    {% set _ = liens.append(('/gestion_utilisateurs', 'fa-users-gear', 'Utilisateurs', 'Comptes et permissions', 'kpi-1')) %}
+                {% endif %}
+                {% for href, icon, titre, sous_titre, couleur in liens %}
+                <div class="col-12 col-sm-6 col-lg-4">
+                    <a href="{{ href }}" class="quick-link {{ couleur }}">
+                        <span class="ql-icon"><i class="fas {{ icon }}"></i></span>
+                        <span>
+                            <span class="ql-title d-block">{{ titre }}</span>
+                            <span class="ql-sub">{{ sous_titre }}</span>
+                        </span>
+                        <i class="fas fa-chevron-right ql-arrow"></i>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Colonne latérale -->
+    <div class="col-12 col-xl-4 d-flex flex-column gap-4">
+        {% if d.stock_bas is defined %}
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5><i class="fas fa-triangle-exclamation text-warning me-2"></i>Stock boutique bas</h5>
+                <a href="/stock_global" class="btn btn-sm btn-outline-secondary">Stock</a>
+            </div>
+            {% if d.stock_bas %}
+            <ul class="list-group list-group-flush">
+                {% for p in d.stock_bas %}
+                <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+                    <div class="text-truncate">
+                        <div class="fw-semibold text-truncate">{{ p.nom }}</div>
+                        <div class="small text-muted">Dépôt : {{ p.quantite_depot or 0 }}</div>
+                    </div>
+                    <span class="badge {{ 'bg-danger' if p.quantite <= 0 else 'bg-warning' }}">{{ p.quantite }} en boutique</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state"><i class="fas fa-circle-check d-block text-success"></i>Tous les produits sont bien approvisionnés.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-clock-rotate-left text-primary me-2"></i>Derniers mouvements de stock</h5>
+            </div>
+            {% if transactions %}
+            <ul class="list-group list-group-flush">
+                {% for t in transactions %}
+                <li class="list-group-item d-flex align-items-center gap-3">
+                    <span class="ql-icon flex-none d-inline-flex align-items-center justify-content-center rounded-3"
+                          style="width:34px;height:34px;background:{{ 'var(--mkm-success-soft)' if t.type == 'entree' else 'var(--mkm-danger-soft)' }};color:{{ 'var(--mkm-success)' if t.type == 'entree' else 'var(--mkm-danger)' }}">
+                        <i class="fas {{ 'fa-arrow-down' if t.type == 'entree' else 'fa-arrow-up' }}"></i>
+                    </span>
+                    <div class="flex-grow-1 text-truncate">
+                        <div class="fw-semibold text-truncate">{{ t.produit.nom if t.produit else 'Produit supprimé' }}</div>
+                        <div class="small text-muted text-truncate">{{ t.description or ('Entrée' if t.type == 'entree' else 'Sortie') }}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="fw-semibold {{ 'text-success' if t.type == 'entree' else 'text-danger' }}">{{ '+' if t.type == 'entree' else '−' }}{{ t.quantite }}</div>
+                        <div class="small text-muted">{{ t.date_transaction.strftime('%d/%m %H:%M') if t.date_transaction }}</div>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="empty-state"><i class="fas fa-box-open d-block"></i>Aucun mouvement récent.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const h = new Date().getHours();
+        const el = document.getElementById('salutation');
+        if (el) el.textContent = h < 12 ? 'Bonjour' : (h < 18 ? 'Bon après-midi' : 'Bonsoir');
+    })();
+</script>
 {% endblock %}
