@@ -52,6 +52,32 @@ def _database_uri(db_dir):
     return f"sqlite:///{os.path.join(db_dir, 'gestion_stock.sqlite')}"
 
 
+# Colonnes ajoutées après la création de la base : (table, colonne, type SQL)
+COLONNES_AJOUTEES = [
+    ('factures', 'vendeur_id', 'INTEGER'),
+    ('ventes', 'prix_achat_unitaire', 'FLOAT'),
+    ('ventes', 'prix_catalogue_unitaire', 'FLOAT'),
+    ('caisse', 'facture_id', 'INTEGER'),
+    ('compte_bancaire', 'facture_id', 'INTEGER'),
+]
+
+
+def _migrer_schema():
+    """Ajoute les colonnes manquantes aux tables existantes (idempotent).
+    Les anciennes lignes gardent ces colonnes vides."""
+    from sqlalchemy import inspect, text
+    inspecteur = inspect(db.engine)
+    tables = set(inspecteur.get_table_names())
+    with db.engine.begin() as conn:
+        for table, colonne, type_sql in COLONNES_AJOUTEES:
+            if table not in tables:
+                continue  # table créée plus tard par db.create_all(), déjà complète
+            existantes = {c['name'] for c in inspecteur.get_columns(table)}
+            if colonne not in existantes:
+                conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {colonne} {type_sql}'))
+                logger.info(f"Migration : colonne {table}.{colonne} ajoutée")
+
+
 def create_app():
     app = Flask(__name__)
     basedir = os.path.abspath(os.path.dirname(__file__))
@@ -83,6 +109,12 @@ def create_app():
 
     from .routes import bp
     app.register_blueprint(bp)
+
+    with app.app_context():
+        try:
+            _migrer_schema()
+        except Exception as e:
+            logger.error(f"Migration du schéma impossible : {e}")
 
     login_manager.login_view = 'routes.login'
     login_manager.login_message = "Veuillez vous connecter pour accéder à cette page."

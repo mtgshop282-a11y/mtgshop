@@ -69,7 +69,7 @@ class PanierManager {
         }
     }
 
-    async ajouterProduit(produitId, quantite, prix) {
+    async ajouterProduit(produitId, quantite, prix, accepterPerte = false) {
         try {
             const btn = document.getElementById('btn-ajouter-panier');
             const originalText = btn.innerHTML;
@@ -88,7 +88,8 @@ class PanierManager {
                 body: JSON.stringify({ 
                     produit_id: produitId, 
                     quantite: quantite, 
-                    prix: prix 
+                    prix: prix,
+                    accepter_perte: accepterPerte
                 })
             });
             
@@ -102,6 +103,13 @@ class PanierManager {
                 this.mettreAJourInterface();
                 this.afficherNotification('Produit ajouté au panier', 'success');
                 this.resetFormulaireProduit();
+            } else if (data.code === 'prix_sous_cout' && !accepterPerte) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (confirm(`${data.message}\n\nConfirmer quand même ce prix ?`)) {
+                    return this.ajouterProduit(produitId, quantite, prix, true);
+                }
+                return;
             } else {
                 this.afficherNotification(data.message || 'Erreur lors de l\'ajout', 'error');
             }
@@ -300,7 +308,7 @@ class PanierManager {
                         </div>
                     </td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.quantite || 0}</strong></td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.prix ? parseFloat(item.prix).toFixed(2) : '0.00'} $</strong></td>
+                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.prix ? parseFloat(item.prix).toFixed(2) : '0.00'} $</strong>${(item.prix_catalogue && item.prix_catalogue - item.prix > 0.005) ? `<div class="small text-muted"><s>${parseFloat(item.prix_catalogue).toFixed(2)} $</s> <span class="badge bg-warning">−${((item.prix_catalogue - item.prix) * item.quantite).toFixed(2)} $</span></div>` : ''}</td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center; font-weight: 600;"><strong>${item.total ? parseFloat(item.total).toFixed(2) : '0.00'} $</strong></td>
                     <td style="border: 1px solid #dee2e6; padding: 8px; text-align: center;">
                         <button type="button" class="btn btn-sm btn-outline-danger btn-action" onclick="panierManager.supprimerProduit(${item.id})" title="Supprimer du panier">
@@ -326,6 +334,9 @@ class PanierManager {
         document.getElementById('produit_id').value = '';
         document.getElementById('quantite').value = 1;
         document.getElementById('prix').value = '';
+        this.selection = null;
+        const alerte = document.getElementById('alerte-prix');
+        if (alerte) alerte.style.display = 'none';
         document.getElementById('btn-ajouter-panier').disabled = true;
     }
     
@@ -359,6 +370,7 @@ class PanierManager {
                     <div style="margin: 5px 0;">
                         <strong>CLIENT: ${facture.nom_client || ''}</strong>
                     </div>
+                    ${facture.vendeur ? `<div style="margin: 5px 0;"><strong>VENDEUR: ${facture.vendeur}</strong></div>` : ''}
         `;
         
         if (facture.type_livraison === 'depot') {
@@ -403,6 +415,7 @@ class PanierManager {
                                 </td>
                                 <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
                                     <strong>${parseFloat(vente.prix_unitaire || 0).toFixed(2)}$</strong>
+                                    ${vente.remise > 0 ? `<div style="font-size: 9px; text-decoration: line-through;">${parseFloat(vente.prix_catalogue || 0).toFixed(2)}$</div>` : ''}
                                 </td>
                                 <td style="border: 1px solid #000; padding: 5px; font-size: 11px; font-weight: bold; text-align: center; vertical-align: top;">
                                     <strong>${parseFloat(vente.montant_total || 0).toFixed(2)}$</strong>
@@ -423,6 +436,7 @@ class PanierManager {
                     <div style="display: inline-block; background-color: #e9ecef; padding: 8px 15px; border: 1px solid #000; border-radius: 4px;">
                         <strong>TOTAL GÉNÉRAL: ${parseFloat(facture.montant_total || 0).toFixed(2)}$</strong>
                     </div>
+                    ${facture.remise_totale > 0 ? `<div style="margin-top: 6px; font-size: 11px;"><strong>REMISE ACCORDÉE: ${parseFloat(facture.remise_totale).toFixed(2)}$</strong></div>` : ''}
                 </div>
         `;
         
@@ -705,6 +719,11 @@ class PanierManager {
     }
     
     setupRealTimeValidation() {
+        const champPrix = document.getElementById('prix');
+        if (champPrix) {
+            champPrix.addEventListener('input', () => this.verifierPrix());
+        }
+
         const nomClient = document.getElementById('nom_client');
         if (nomClient) {
             nomClient.addEventListener('input', () => {
@@ -772,7 +791,8 @@ class PanierManager {
                 <a href="javascript:void(0)" class="list-group-item list-group-item-action produit-item text-center" 
                    onclick="panierManager.selectionnerProduit(this)"
                    data-id="${produit.id}" 
-                   data-prix="${produit.prix}" 
+                   data-prix="${produit.prix}"
+                   data-prix-achat="${produit.prix_achat}" 
                    data-nom="${produit.nom}" 
                    data-stock="${produit.quantite}"
                    data-stock-depot="${produit.quantite_depot}">
@@ -807,6 +827,10 @@ class PanierManager {
         const produitNom = element.getAttribute('data-nom');
         const produitStock = element.getAttribute('data-stock');
         const produitStockDepot = element.getAttribute('data-stock-depot');
+        this.selection = {
+            prixAchat: parseFloat(element.getAttribute('data-prix-achat')) || 0,
+            prixCatalogue: parseFloat(produitPrix) || 0
+        };
         
         console.log('Données produit:', { produitId, produitPrix, produitNom, produitStock, produitStockDepot });
         
@@ -819,6 +843,7 @@ class PanierManager {
         document.getElementById('stock-produit-text').textContent = `Stock magasin: ${produitStock} | Dépôt: ${produitStockDepot || 0}`;
         document.getElementById('prix-produit-text').textContent = `${parseFloat(produitPrix).toFixed(2)} $`;
         document.getElementById('produit-selectionne-card').style.display = 'block';
+        this.verifierPrix();
         
         // Activer le bouton d'ajout
         document.getElementById('btn-ajouter-panier').disabled = false;
@@ -830,6 +855,25 @@ class PanierManager {
         }
     }
     
+    verifierPrix() {
+        const alerte = document.getElementById('alerte-prix');
+        if (!alerte) return;
+        const prix = parseFloat(document.getElementById('prix').value);
+        const sel = this.selection;
+        if (!sel || isNaN(prix)) { alerte.style.display = 'none'; return; }
+        if (prix < sel.prixAchat - 0.005) {
+            alerte.className = 'small text-danger mt-1';
+            alerte.innerHTML = `<i class="fas fa-triangle-exclamation me-1"></i>Sous le prix d'achat (${sel.prixAchat.toFixed(2)} $) : vente à perte`;
+            alerte.style.display = 'block';
+        } else if (prix < sel.prixCatalogue - 0.005) {
+            alerte.className = 'small text-warning mt-1';
+            alerte.innerHTML = `<i class="fas fa-tag me-1"></i>Remise de ${(sel.prixCatalogue - prix).toFixed(2)} $ par unité (prix catalogue ${sel.prixCatalogue.toFixed(2)} $)`;
+            alerte.style.display = 'block';
+        } else {
+            alerte.style.display = 'none';
+        }
+    }
+
     calculerCredit() {
         const paiementCredit = document.getElementById('paiement_credit');
         if (!paiementCredit || !paiementCredit.checked) return;
