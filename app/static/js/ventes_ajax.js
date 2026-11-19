@@ -334,9 +334,6 @@ class PanierManager {
         document.getElementById('produit_id').value = '';
         document.getElementById('quantite').value = 1;
         document.getElementById('prix').value = '';
-        this.selection = null;
-        const alerte = document.getElementById('alerte-prix');
-        if (alerte) alerte.style.display = 'none';
         document.getElementById('btn-ajouter-panier').disabled = true;
     }
     
@@ -717,11 +714,6 @@ class PanierManager {
     }
     
     setupRealTimeValidation() {
-        const champPrix = document.getElementById('prix');
-        if (champPrix) {
-            champPrix.addEventListener('input', () => this.verifierPrix());
-        }
-
         const nomClient = document.getElementById('nom_client');
         if (nomClient) {
             nomClient.addEventListener('input', () => {
@@ -790,7 +782,6 @@ class PanierManager {
                    onclick="panierManager.selectionnerProduit(this)"
                    data-id="${produit.id}" 
                    data-prix="${produit.prix}"
-                   data-prix-achat="${produit.prix_achat}" 
                    data-nom="${produit.nom}" 
                    data-stock="${produit.quantite}"
                    data-stock-depot="${produit.quantite_depot}">
@@ -825,10 +816,6 @@ class PanierManager {
         const produitNom = element.getAttribute('data-nom');
         const produitStock = element.getAttribute('data-stock');
         const produitStockDepot = element.getAttribute('data-stock-depot');
-        this.selection = {
-            prixAchat: parseFloat(element.getAttribute('data-prix-achat')) || 0,
-            prixCatalogue: parseFloat(produitPrix) || 0
-        };
         
         console.log('Données produit:', { produitId, produitPrix, produitNom, produitStock, produitStockDepot });
         
@@ -841,7 +828,6 @@ class PanierManager {
         document.getElementById('stock-produit-text').textContent = `Stock magasin: ${produitStock} | Dépôt: ${produitStockDepot || 0}`;
         document.getElementById('prix-produit-text').textContent = `${parseFloat(produitPrix).toFixed(2)} $`;
         document.getElementById('produit-selectionne-card').style.display = 'block';
-        this.verifierPrix();
         
         // Activer le bouton d'ajout
         document.getElementById('btn-ajouter-panier').disabled = false;
@@ -853,21 +839,6 @@ class PanierManager {
         }
     }
     
-    verifierPrix() {
-        const alerte = document.getElementById('alerte-prix');
-        if (!alerte) return;
-        const prix = parseFloat(document.getElementById('prix').value);
-        const sel = this.selection;
-        if (!sel || isNaN(prix)) { alerte.style.display = 'none'; return; }
-        if (prix < sel.prixAchat - 0.005) {
-            alerte.className = 'small text-danger mt-1';
-            alerte.innerHTML = `<i class="fas fa-triangle-exclamation me-1"></i>Sous le prix d'achat (${sel.prixAchat.toFixed(2)} $) : vente à perte`;
-            alerte.style.display = 'block';
-        } else {
-            alerte.style.display = 'none';
-        }
-    }
-
     calculerCredit() {
         const paiementCredit = document.getElementById('paiement_credit');
         if (!paiementCredit || !paiementCredit.checked) return;

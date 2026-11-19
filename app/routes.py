@@ -79,6 +79,12 @@ def _soldes_tresorerie_facture(facture_id):
     return round(caisse, 2), round(banque, 2)
 
 
+def peut_voir_couts(user):
+    """Coûts d'achat agrégés (valeur du stock) : réservés à l'administrateur et aux
+    comptes autorisés à voir les bénéfices."""
+    return bool(user and user.is_authenticated and user.has_permission('voir_benefice'))
+
+
 def _livraison_effectuee(facture_id):
     """Le stock dépôt n'est déduit qu'au passage d'une livraison au statut « livree »."""
     livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
@@ -102,7 +108,7 @@ def permission_required(permission):
 # Context processor
 @bp.context_processor
 def inject_common_variables():
-    common_vars = {'factures_credit_count': 0}
+    common_vars = {'factures_credit_count': 0, 'peut_voir_couts': peut_voir_couts(current_user)}
     
     try:
         if current_user.is_authenticated and hasattr(current_user, 'has_permission'):
@@ -402,10 +408,8 @@ def api_ajouter_au_panier():
             return jsonify({
                 'success': False,
                 'code': 'prix_sous_cout',
-                'message': (f"Le prix saisi ({prix:.2f} $) est inférieur au prix d'achat de "
-                            f"{produit_ajoute.nom} ({produit_ajoute.prix_achat:.2f} $). "
-                            f"Cette vente se fera à perte."),
-                'prix_achat': produit_ajoute.prix_achat
+                'message': (f"Le prix saisi ({prix:.2f} $) est trop bas pour {produit_ajoute.nom} : "
+                            f"cette vente se fera à perte.")
             }), 409
 
         session_id = request.cookies.get('session_id')
@@ -596,7 +600,6 @@ def api_search_produits():
                 'nom': produit.nom,
                 'description': produit.description,
                 'prix': float(produit.prix),
-                'prix_achat': float(produit.prix_achat),
                 'quantite': produit.quantite,
                 'quantite_depot': produit.quantite_depot
             })
@@ -2072,6 +2075,8 @@ def stock_global():
                 'quantite': produit.quantite,
                 'quantite_depot': produit.quantite_depot,
                 'prix_achat': produit.prix_achat,
+                'prix': produit.prix,
+                'en_route': produit.en_route or 0,
                 'description': produit.description,
             },
             'cout_total': cout_total_produit
