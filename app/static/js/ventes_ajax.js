@@ -69,7 +69,7 @@ class PanierManager {
         }
     }
 
-    async ajouterProduit(produitId, quantite, prix) {
+    async ajouterProduit(produitId, quantite, prix, accepterPerte = false) {
         try {
             const btn = document.getElementById('btn-ajouter-panier');
             const originalText = btn.innerHTML;
@@ -88,7 +88,8 @@ class PanierManager {
                 body: JSON.stringify({ 
                     produit_id: produitId, 
                     quantite: quantite, 
-                    prix: prix 
+                    prix: prix,
+                    accepter_perte: accepterPerte
                 })
             });
             
@@ -102,6 +103,13 @@ class PanierManager {
                 this.mettreAJourInterface();
                 this.afficherNotification('Produit ajouté au panier', 'success');
                 this.resetFormulaireProduit();
+            } else if (data.code === 'prix_sous_cout' && !accepterPerte) {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                if (confirm(`${data.message}\n\nConfirmer quand même ce prix ?`)) {
+                    return this.ajouterProduit(produitId, quantite, prix, true);
+                }
+                return;
             } else {
                 this.afficherNotification(data.message || 'Erreur lors de l\'ajout', 'error');
             }
@@ -359,6 +367,7 @@ class PanierManager {
                     <div style="margin: 5px 0;">
                         <strong>CLIENT: ${facture.nom_client || ''}</strong>
                     </div>
+                    ${facture.vendeur ? `<div style="margin: 5px 0;"><strong>VENDEUR: ${facture.vendeur}</strong></div>` : ''}
         `;
         
         if (facture.type_livraison === 'depot') {
@@ -772,7 +781,7 @@ class PanierManager {
                 <a href="javascript:void(0)" class="list-group-item list-group-item-action produit-item text-center" 
                    onclick="panierManager.selectionnerProduit(this)"
                    data-id="${produit.id}" 
-                   data-prix="${produit.prix}" 
+                   data-prix="${produit.prix}"
                    data-nom="${produit.nom}" 
                    data-stock="${produit.quantite}"
                    data-stock-depot="${produit.quantite_depot}">

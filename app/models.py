@@ -93,8 +93,11 @@ class Factures(db.Model):
     lieu_retrait = db.Column(db.String(50), nullable=True)
     annulee = db.Column(db.Boolean, default=False)
     date_annulation = db.Column(db.DateTime, nullable=True)
-    
+    # Utilisateur qui a enregistré la vente (vide pour les factures antérieures)
+    vendeur_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
     client = db.relationship('Clients', backref='factures', lazy=True)
+    vendeur = db.relationship('User', foreign_keys=[vendeur_id])
     ventes = db.relationship('Ventes', backref='facture', lazy=True)
 
     def __repr__(self):
@@ -118,8 +121,23 @@ class Ventes(db.Model):
     facture_id = db.Column(db.Integer, db.ForeignKey('factures.id'), nullable=False)
     quantite = db.Column(db.Integer, nullable=False)
     montant_total = db.Column(db.Float, nullable=False)
+    # Prix figés au moment de la vente : le bénéfice et la remise ne bougent plus
+    # si le catalogue change ensuite (vides pour les ventes antérieures).
+    prix_achat_unitaire = db.Column(db.Float, nullable=True)
+    prix_catalogue_unitaire = db.Column(db.Float, nullable=True)
 
     produit = db.relationship('Produits', backref='ventes')
+
+    @property
+    def prix_unitaire(self):
+        return self.montant_total / self.quantite if self.quantite else 0
+
+    @property
+    def remise(self):
+        """Remise totale accordée sur la ligne (0 si vendue au prix catalogue ou au-dessus)."""
+        if self.prix_catalogue_unitaire is None:
+            return 0
+        return max(0.0, round((self.prix_catalogue_unitaire - self.prix_unitaire) * self.quantite, 2))
     benefice = db.relationship('Benefices', backref='vente', uselist=False)
 
     def __repr__(self):
@@ -178,6 +196,8 @@ class Caisse(db.Model):
     montant = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
     date_transaction = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    # Renseigné pour les écritures automatiques liées à une facture
+    facture_id = db.Column(db.Integer, db.ForeignKey('factures.id'), nullable=True)
 
     def __repr__(self):
         return f"<Caisse {self.id} - {self.type_transaction} {self.montant}>"
@@ -189,6 +209,7 @@ class CompteBancaire(db.Model):
     montant = db.Column(db.Float, nullable=False)
     description = db.Column(db.String(200))
     date_transaction = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    facture_id = db.Column(db.Integer, db.ForeignKey('factures.id'), nullable=True)
 
     def __repr__(self):
         return f"<CompteBancaire {self.id} - {self.type_transaction} {self.montant}>"

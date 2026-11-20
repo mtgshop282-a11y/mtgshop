@@ -179,13 +179,22 @@
                 <!-- Client et Numéro de facture -->
                 <div class="col-md-6">
                     <div class="row g-2">
-                        <div class="col-12 col-sm-6">
+                        <div class="col-12 col-sm-4">
                             <label for="filterClient" class="form-label fw-semibold">
                                 <i class="fas fa-user text-primary me-1"></i> Client
                             </label>
                             <input type="text" class="form-control" id="filterClient" placeholder="Nom du client...">
                         </div>
-                        <div class="col-12 col-sm-6">
+                        <div class="col-12 col-sm-4">
+                            <label for="filterVendeur" class="form-label fw-semibold">
+                                <i class="fas fa-user-tag text-primary me-1"></i> Vendeur
+                            </label>
+                            <select class="form-select" id="filterVendeur">
+                                <option value="">Tous</option>
+                                {% for v in vendeurs %}<option value="{{ v.id }}">{{ v.firstname or '' }} {{ v.lastname or '' }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-12 col-sm-4">
                             <label for="filterFacture" class="form-label fw-semibold">
                                 <i class="fas fa-file-invoice text-primary me-1"></i> Facture
                             </label>
@@ -359,12 +368,16 @@
                             data-montant="{{ facture.montant_total }}"
                             data-paiement="{% if facture.paiement_credit %}credit{% else %}comptant{% endif %}"
                             data-livraison="{{ facture.type_livraison|default('sur_place') }}"
-                            data-numero="{{ facture.id }}">
+                            data-numero="{{ facture.id }}"
+                            data-vendeur="{{ facture.vendeur_id or '' }}">
                             <td class="text-center fw-bold text-primary">{{ facture.id }}</td>
                             <td class="text-center">
                                 <div class="d-flex align-items-center justify-content-center">
                                     <i class="fas fa-user-circle text-muted me-2"></i>
-                                    <span class="fw-semibold">{{ facture.nom_client }}</span>
+                                    <div class="text-start">
+                                        <span class="fw-semibold">{{ facture.nom_client }}</span>
+                                        {% if facture.vendeur %}<small class="d-block text-muted vendeur-info"><i class="fas fa-user-tag me-1"></i>{{ facture.vendeur.firstname or facture.vendeur.email }}</small>{% endif %}
+                                    </div>
                                 </div>
                             </td>
                             <td class="text-center">
@@ -774,6 +787,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const filterDateEnd = document.getElementById('filterDateEnd');
     const filterClient = document.getElementById('filterClient');
     const filterFacture = document.getElementById('filterFacture');
+    const filterVendeur = document.getElementById('filterVendeur');
     const filterPaiement = document.getElementById('filterPaiement');
     const filterLivraison = document.getElementById('filterLivraison');
     const filterMontantMin = document.getElementById('filterMontantMin');
@@ -904,6 +918,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const endDate = filterDateEnd.value;
         const client = filterClient.value.toLowerCase().trim();
         const factureNum = filterFacture.value.toLowerCase().trim();
+        const vendeur = filterVendeur ? filterVendeur.value : '';
         const paiement = filterPaiement.value;
         const livraison = filterLivraison.value;
         const montantMin = parseFloat(filterMontantMin.value) || 0;
@@ -930,6 +945,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const matchesPaiement = !paiement || rowPaiement === paiement;
             const matchesLivraison = !livraison || rowLivraison === livraison;
             const matchesMontant = rowMontant >= montantMin && rowMontant <= montantMax;
+            const matchesVendeur = !vendeur || (row.getAttribute('data-vendeur') || '') === vendeur;
             
             // Recherche globale
             let matchesSearch = false;
@@ -954,7 +970,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             const isVisible = matchesDate && matchesClient && matchesFacture && 
-                            matchesPaiement && matchesLivraison && matchesMontant && matchesSearch;
+                            matchesPaiement && matchesLivraison && matchesMontant && matchesSearch && matchesVendeur;
             
             if (isVisible) {
                 row.style.display = '';
@@ -991,6 +1007,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterDateEnd.value = today;
         filterClient.value = '';
         filterFacture.value = '';
+        if (filterVendeur) filterVendeur.value = '';
         filterPaiement.value = '';
         filterLivraison.value = '';
         filterMontantMin.value = '';
@@ -1005,6 +1022,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterDateEnd.value = week.end;
         filterClient.value = '';
         filterFacture.value = '';
+        if (filterVendeur) filterVendeur.value = '';
         filterPaiement.value = '';
         filterLivraison.value = '';
         filterMontantMin.value = '';
@@ -1019,6 +1037,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterDateEnd.value = month.end;
         filterClient.value = '';
         filterFacture.value = '';
+        if (filterVendeur) filterVendeur.value = '';
         filterPaiement.value = '';
         filterLivraison.value = '';
         filterMontantMin.value = '';
@@ -1033,6 +1052,7 @@ document.addEventListener('DOMContentLoaded', function() {
         filterDateEnd.value = '';
         filterClient.value = '';
         filterFacture.value = '';
+        if (filterVendeur) filterVendeur.value = '';
         filterPaiement.value = '';
         filterLivraison.value = '';
         filterMontantMin.value = '';
@@ -1058,7 +1078,7 @@ document.addEventListener('DOMContentLoaded', function() {
             
             // Extraire les données
             const numero = cells[0].textContent.trim();
-            const client = cells[1].textContent.trim();
+            const client = (cells[1].querySelector('.fw-semibold') || cells[1]).textContent.trim();
             
             // Date et heure
             const dateElements = cells[2].querySelectorAll('small');
@@ -1232,7 +1252,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const debouncedFilter = debounce(filterFactures, 300);
     
     // Écouteurs pour tous les filtres
-    [filterDateStart, filterDateEnd, filterClient, filterFacture, filterPaiement, 
+    [filterDateStart, filterDateEnd, filterClient, filterFacture, filterVendeur, filterPaiement, 
      filterLivraison, filterMontantMin, filterMontantMax, searchGlobal].forEach(element => {
         if (element) {
             element.addEventListener('input', debouncedFilter);

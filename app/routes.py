@@ -47,6 +47,44 @@ def _supprimer_photo(chemin_relatif):
     delete_file(os.path.join(current_app.config['UPLOAD_FOLDER'], nom))
 
 
+MODES_CAISSE = ('cash', 'comptant', 'especes')
+MODES_BANQUE = ('virement',)
+
+
+def _ecrire_tresorerie(mode, sens, montant, description, facture_id):
+    """Écriture automatique liée à une facture.
+    sens : 'entree' (argent reçu) ou 'sortie' (argent rendu).
+    Espèces -> caisse ; virement -> compte bancaire ; autres modes (Mobile Money,
+    chèque…) : rien, le paiement reste tracé dans l'historique des paiements."""
+    montant = round(float(montant or 0), 2)
+    if montant <= EPSILON_MONTANT:
+        return
+    mode = (mode or 'cash').lower()
+    if mode in MODES_CAISSE:
+        db.session.add(Caisse(type_transaction='entree' if sens == 'entree' else 'sortie',
+                              montant=montant, description=description,
+                              date_transaction=datetime.now(), facture_id=facture_id))
+    elif mode in MODES_BANQUE:
+        db.session.add(CompteBancaire(type_transaction='depot' if sens == 'entree' else 'retrait',
+                                      montant=montant, description=description,
+                                      date_transaction=datetime.now(), facture_id=facture_id))
+
+
+def _soldes_tresorerie_facture(facture_id):
+    """Montants nets (reçus - rendus) enregistrés automatiquement pour une facture."""
+    caisse = sum(c.montant if c.type_transaction == 'entree' else -c.montant
+                 for c in Caisse.query.filter_by(facture_id=facture_id).all())
+    banque = sum(b.montant if b.type_transaction == 'depot' else -b.montant
+                 for b in CompteBancaire.query.filter_by(facture_id=facture_id).all())
+    return round(caisse, 2), round(banque, 2)
+
+
+def peut_voir_couts(user):
+    """Coûts d'achat agrégés (valeur du stock) : réservés à l'administrateur et aux
+    comptes autorisés à voir les bénéfices."""
+    return bool(user and user.is_authenticated and user.has_permission('voir_benefice'))
+
+
 def _livraison_effectuee(facture_id):
     """Le stock dépôt n'est déduit qu'au passage d'une livraison au statut « livree »."""
     livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
@@ -70,7 +108,7 @@ def permission_required(permission):
 # Context processor
 @bp.context_processor
 def inject_common_variables():
-    common_vars = {'factures_credit_count': 0}
+    common_vars = {'factures_credit_count': 0, 'peut_voir_couts': peut_voir_couts(current_user)}
     
     try:
         if current_user.is_authenticated and hasattr(current_user, 'has_permission'):
@@ -358,11 +396,21 @@ def api_ajouter_au_panier():
                 'message': 'La quantité et le prix doivent être positifs.'
             }), 400
         
-        if not Produits.query.get(produit_id):
+        produit_ajoute = Produits.query.get(produit_id)
+        if not produit_ajoute:
             return jsonify({
                 'success': False,
                 'message': 'Produit introuvable.'
             }), 404
+
+        # Vente à perte : seulement après confirmation explicite du vendeur
+        if prix < (produit_ajoute.prix_achat or 0) - EPSILON_MONTANT and not data.get('accepter_perte'):
+            return jsonify({
+                'success': False,
+                'code': 'prix_sous_cout',
+                'message': (f"Le prix saisi ({prix:.2f} $) est trop bas pour {produit_ajoute.nom} : "
+                            f"cette vente se fera à perte.")
+            }), 409
 
         session_id = request.cookies.get('session_id')
         if not session_id:
@@ -409,6 +457,7 @@ def api_ajouter_au_panier():
                 'produit_nom': prod.nom if prod else 'Produit supprimé',
                 'quantite': item.quantite,
                 'prix': item.prix,
+                'prix_catalogue': item.produit.prix if item.produit else item.prix,
                 'total': item_total
             })
             
@@ -509,6 +558,7 @@ def api_get_panier():
                 'produit_nom': produit.nom if produit else 'Produit supprimé',
                 'quantite': item.quantite,
                 'prix': item.prix,
+                'prix_catalogue': item.produit.prix if item.produit else item.prix,
                 'total': item_total
             })
             
@@ -550,7 +600,6 @@ def api_search_produits():
                 'nom': produit.nom,
                 'description': produit.description,
                 'prix': float(produit.prix),
-                'prix_achat': float(produit.prix_achat),
                 'quantite': produit.quantite,
                 'quantite_depot': produit.quantite_depot
             })
@@ -647,7 +696,8 @@ def api_finaliser_vente():
             montant_cash=montant_cash,
             montant_credit=montant_credit,
             type_livraison=type_livraison,
-            lieu_retrait=lieu_retrait
+            lieu_retrait=lieu_retrait,
+            vendeur_id=current_user.id
         )
         db.session.add(nouvelle_facture)
         db.session.flush()
@@ -692,7 +742,9 @@ def api_finaliser_vente():
                 produit_id=item.produit_id,
                 facture_id=facture_id,
                 quantite=item.quantite,
-                montant_total=item.prix * item.quantite
+                montant_total=item.prix * item.quantite,
+                prix_achat_unitaire=produit.prix_achat,
+                prix_catalogue_unitaire=produit.prix
             )
             db.session.add(nouvelle_vente)
         
@@ -721,6 +773,11 @@ def api_finaliser_vente():
                 description=f"Paiement initial pour facture crédit #{facture_id}"
             )
             db.session.add(premier_paiement)
+
+        # ========== ENCAISSEMENT EN CAISSE ==========
+        # Vente comptant : tout le montant ; vente à crédit : l'acompte versé
+        _ecrire_tresorerie('cash', 'entree', montant_cash,
+                           f"Vente facture #{facture_id} - {nom_client or 'client'}", facture_id)
         
         # ========== VIDER LE PANIER ==========
         Panier.query.filter_by(session_id=session_id).delete()
@@ -738,6 +795,8 @@ def api_finaliser_vente():
                 'produit_nom': produit.nom if produit else 'Produit supprimé',
                 'quantite': vente.quantite,
                 'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
+                'prix_catalogue': float(vente.prix_catalogue_unitaire or 0),
+                'remise': float(vente.remise),
                 'montant_total': float(vente.montant_total)
             })
         
@@ -753,7 +812,9 @@ def api_finaliser_vente():
                 'montant_credit': montant_credit,
                 'type_livraison': type_livraison,
                 'lieu_retrait': lieu_retrait,
-                'date_facture': nouvelle_facture.date_facture.strftime('%d/%m/%Y %H:%M')
+                'date_facture': nouvelle_facture.date_facture.strftime('%d/%m/%Y %H:%M'),
+                'vendeur': f"{current_user.firstname or ''} {current_user.lastname or ''}".strip() or current_user.email,
+                'remise_totale': round(sum(v['remise'] for v in ventes_data), 2)
             },
             'ventes': ventes_data,
             'livraison_info': livraison_info
@@ -849,7 +910,10 @@ def details_facture_json(id):
         'type_livraison': facture.type_livraison,
         'lieu_retrait': facture.lieu_retrait,
         'annulee': facture.annulee,
-        'annulation_possible': annulation_possible
+        'annulation_possible': annulation_possible,
+        'vendeur': ((f"{facture.vendeur.firstname or ''} {facture.vendeur.lastname or ''}".strip() or facture.vendeur.email)
+                    if facture.vendeur else None),
+        'remise_totale': round(sum(v.remise for v in ventes), 2)
     }
     
     ventes_data = []
@@ -857,6 +921,7 @@ def details_facture_json(id):
         ventes_data.append({
             'produit_id': vente.produit_id,  # AJOUTÉ
             'produit_nom': vente.produit.nom if vente.produit else 'Produit supprimé',
+            'remise': float(vente.remise),
             'quantite': vente.quantite,
             'prix_unitaire': float(vente.montant_total / vente.quantite) if vente.quantite > 0 else 0,
             'montant_total': float(vente.montant_total)
@@ -932,6 +997,12 @@ def annuler_facture(facture_id):
             livraison.statut = 'annulee'
             livraison.date_preparation = None
             livraison.date_livree = None
+
+        # Rendre au client ce qui avait été encaissé automatiquement pour cette facture
+        # (les factures antérieures à la liaison avec la caisse n'ont rien à inverser)
+        net_caisse, net_banque = _soldes_tresorerie_facture(facture_id)
+        _ecrire_tresorerie('cash', 'sortie', net_caisse, f"Remboursement annulation facture #{facture_id}", facture_id)
+        _ecrire_tresorerie('virement', 'sortie', net_banque, f"Remboursement annulation facture #{facture_id}", facture_id)
 
         # Marquer la facture annulée et remettre les montants à zéro
         facture.annulee = True
@@ -1094,11 +1165,22 @@ def modifier_facture():
                     produit_id=article['produit_id'],
                     facture_id=facture_id,
                     quantite=article['quantite'],
-                    montant_total=article['montant_total']
+                    montant_total=article['montant_total'],
+                    prix_achat_unitaire=produit.prix_achat,
+                    prix_catalogue_unitaire=produit.prix
                 )
                 db.session.add(nouvelle_vente)
             
-            # 4. Mettre à jour la facture
+            # 4. Ajuster la caisse de la différence encaissée (factures liées à la caisse uniquement)
+            net_caisse, net_banque = _soldes_tresorerie_facture(facture_id)
+            if net_caisse or net_banque:
+                ecart = round(montant_cash - (facture.montant_cash or 0), 2)
+                if ecart > 0:
+                    _ecrire_tresorerie('cash', 'entree', ecart, f"Complément après modification facture #{facture_id}", facture_id)
+                elif ecart < 0:
+                    _ecrire_tresorerie('cash', 'sortie', min(-ecart, net_caisse), f"Remboursement après modification facture #{facture_id}", facture_id)
+
+            # 5. Mettre à jour la facture
             facture.nom_client = nom_client
             facture.montant_total = nouveau_montant_total
             facture.paiement_credit = paiement_credit
@@ -1116,7 +1198,7 @@ def modifier_facture():
                 # Vous pourriez stocker cela dans un champ séparé ou dans une table d'historique
                 pass
             
-            # 5. Mettre à jour la livraison si nécessaire
+            # 6. Mettre à jour la livraison si nécessaire
             livraison = LivraisonDepot.query.filter_by(facture_id=facture_id).first()
             if type_livraison != 'depot':
                 # Passage en vente sur place : la commande dépôt n'a plus lieu d'être
@@ -1281,6 +1363,8 @@ def paiement_client():
             db.session.add(nouveau_paiement)
             db.session.flush()
             created_payments.append(nouveau_paiement.id)
+            _ecrire_tresorerie(mode_paiement, 'entree', payement_sur_facture,
+                               f"Remboursement crédit facture #{facture.id} - {client_name}", facture.id)
 
             facture.montant_cash += payement_sur_facture
             facture.montant_credit = round(facture.montant_credit - payement_sur_facture, 2)
@@ -1404,6 +1488,8 @@ def marquer_facture_payee():
         # Mettre à jour les montants de la facture
         montant_paye = min(montant_paye, facture.montant_credit)
         nouveau_paiement.montant = montant_paye
+        _ecrire_tresorerie(mode_paiement, 'entree', montant_paye,
+                           f"Remboursement crédit facture #{facture_id} - {facture.nom_client}", facture_id)
         facture.montant_cash += montant_paye
         facture.montant_credit = round(facture.montant_credit - montant_paye, 2)
 
@@ -1631,6 +1717,7 @@ def factures():
                          total_credit=total_credit,
                          total_comptant=total_comptant,
                          stats=stats,
+                         vendeurs=User.query.order_by(User.firstname.asc()).all(),
                          annulees_page=False)
 
 @bp.route('/factures_annulees', methods=['GET'])
@@ -1691,6 +1778,7 @@ def factures_annulees():
                          total_credit=total_credit,
                          total_comptant=total_comptant,
                          stats=stats,
+                         vendeurs=User.query.order_by(User.firstname.asc()).all(),
                          annulees_page=True)
 # ==================== ROUTES DE DÉPENSES ====================
 
@@ -1838,6 +1926,10 @@ def gestion_benefices():
         date_debut = aujourd_hui
         date_fin = aujourd_hui
 
+    # Prix d'achat figé au moment de la vente ; à défaut (ventes antérieures),
+    # prix d'achat actuel du produit
+    cout_unitaire = func.coalesce(Ventes.prix_achat_unitaire, Produits.prix_achat)
+
     date_debut_obj = datetime.strptime(date_debut, '%Y-%m-%d')
     date_fin_obj = datetime.strptime(date_fin, '%Y-%m-%d') + timedelta(days=1)
 
@@ -1846,8 +1938,8 @@ def gestion_benefices():
         Factures.date_facture.label('date_facture'),
         db.func.sum(Ventes.quantite).label('quantite_vendue'),
         db.func.sum(Ventes.montant_total).label('montant_ventes'),
-        db.func.sum(Ventes.quantite * Produits.prix_achat).label('cout_achat'),
-        db.func.sum(Ventes.montant_total - (Ventes.quantite * Produits.prix_achat)).label('benefice')
+        db.func.sum(Ventes.quantite * cout_unitaire).label('cout_achat'),
+        db.func.sum(Ventes.montant_total - (Ventes.quantite * cout_unitaire)).label('benefice')
     ).join(Produits, Ventes.produit_id == Produits.id) \
      .join(Factures, Ventes.facture_id == Factures.id)
 
@@ -1863,7 +1955,7 @@ def gestion_benefices():
         .scalar() or 0
 
     total_couts = db.session.query(
-        db.func.sum(Ventes.quantite * Produits.prix_achat)
+        db.func.sum(Ventes.quantite * cout_unitaire)
     ).join(Produits, Ventes.produit_id == Produits.id) \
         .join(Factures, Ventes.facture_id == Factures.id) \
         .filter(Factures.date_facture >= date_debut_obj) \
@@ -1983,6 +2075,8 @@ def stock_global():
                 'quantite': produit.quantite,
                 'quantite_depot': produit.quantite_depot,
                 'prix_achat': produit.prix_achat,
+                'prix': produit.prix,
+                'en_route': produit.en_route or 0,
                 'description': produit.description,
             },
             'cout_total': cout_total_produit

@@ -1,483 +1,369 @@
 {% extends "layout.html" %}
 
-{% block title %}Stock Global{% endblock %}
+{% block title %}Stock global - MKM Shop{% endblock %}
 
 {% block content %}
-<div class="container">
-    <h2 class="mb-4"><i class="fas fa-boxes"></i> Stock Global</h2>
+{# ---------- Calculs ---------- #}
+{% set seuil = 5 %}
+{% set ns = namespace(unites_mag=0, unites_dep=0, vente=0, ruptures=0, a_transferer=0, bas=0, en_route=0) %}
+{% for item in produits_avec_cout %}
+    {% set p = item.produit %}
+    {% set mag = p.quantite or 0 %}{% set dep = p.quantite_depot or 0 %}
+    {% set ns.unites_mag = ns.unites_mag + mag %}
+    {% set ns.unites_dep = ns.unites_dep + dep %}
+    {% set ns.vente = ns.vente + (mag + dep) * (p.prix or 0) %}
+    {% set ns.en_route = ns.en_route + (p.en_route or 0) %}
+    {% if mag + dep <= 0 %}{% set ns.ruptures = ns.ruptures + 1 %}
+    {% elif mag <= 0 and dep > 0 %}{% set ns.a_transferer = ns.a_transferer + 1 %}
+    {% elif mag <= seuil %}{% set ns.bas = ns.bas + 1 %}{% endif %}
+{% endfor %}
+{% set marge = ns.vente - cout_total_global %}
+{% set tries = produits_avec_cout|sort(attribute='cout_total', reverse=True) %}
+{% set top = tries[:10] %}
+{% set reste = (cout_total_global - (top|sum(attribute='cout_total'))) %}
+{% set max_barre = [top[0].cout_total if top else 0, reste]|max or 1 %}
+{% macro dollars(v) %}{{ "{:,.2f}".format(v or 0).replace(',', ' ') }} ${% endmacro %}
 
-    <!-- Afficher les messages flash -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
-    <!-- Indicateurs -->
-    <div class="row g-3 mb-4">
-        <div class="col-12 col-md-4">
-            <div class="card kpi kpi-1 h-100"><div class="card-body">
-                <i class="fas fa-coins"></i><small>Valeur totale du stock (prix d'achat)</small>
-                <div class="kpi-value">{{ "{:,.2f}".format(cout_total_global).replace(',', ' ') }} $</div>
-                <div class="small mt-1">{{ produits_avec_cout|length }} produits</div>
-            </div></div>
-        </div>
-        <div class="col-6 col-md-4">
-            <div class="card kpi kpi-3 h-100"><div class="card-body">
-                <i class="fas fa-store"></i><small>En magasin</small>
-                <div class="kpi-value">{{ "{:,.2f}".format(cout_global_magasin).replace(',', ' ') }} $</div>
-            </div></div>
-        </div>
-        <div class="col-6 col-md-4">
-            <div class="card kpi kpi-2 h-100"><div class="card-body">
-                <i class="fas fa-warehouse"></i><small>Au dépôt</small>
-                <div class="kpi-value">{{ "{:,.2f}".format(cout_global_depot).replace(',', ' ') }} $</div>
-            </div></div>
-        </div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+    <h2 class="mb-0"><i class="fas fa-boxes-stacked"></i> Stock global</h2>
+    <div class="d-flex gap-2">
+        <button type="button" id="exportCSV" class="btn btn-sm btn-outline-secondary"><i class="fas fa-file-csv me-1"></i> Exporter CSV</button>
+        <button type="button" id="printButton" class="btn btn-sm btn-outline-secondary"><i class="fas fa-print me-1"></i> Imprimer</button>
     </div>
+</div>
 
-    <!-- Filtre de recherche et boutons d'action -->
-    <div class="card shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #2C3E50;">
-            <h5 class="card-title mb-0"><i class="fas fa-filter me-2"></i> Filtres et Actions</h5>
-        </div>
-        <div class="card-body" style="background-color: #F8F9FA;">
-            <div class="row">
-                <!-- Champ de recherche -->
-                <div class="col-md-6">
-                    <div class="input-group">
-                        <span class="input-group-text"><i class="fas fa-search"></i></span>
-                        <input type="text" id="searchProduit" class="form-control" placeholder="Rechercher un produit...">
+<!-- Indicateurs -->
+<div class="row g-3 mb-4">
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card kpi kpi-1 h-100"><div class="card-body">
+            <i class="fas fa-coins"></i><small>Valeur du stock (prix d'achat)</small>
+            <div class="kpi-value">{{ dollars(cout_total_global) }}</div>
+            <div class="small mt-1">{{ produits_avec_cout|length }} produits · {{ ns.unites_mag + ns.unites_dep }} unités</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-6 col-xl-3">
+        <div class="card kpi kpi-3 h-100"><div class="card-body">
+            <i class="fas fa-store"></i><small>En magasin</small>
+            <div class="kpi-value">{{ dollars(cout_global_magasin) }}</div>
+            <div class="small mt-1">{{ ns.unites_mag }} unités · {{ ((cout_global_magasin / cout_total_global * 100) if cout_total_global else 0)|round|int }} % de la valeur</div>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-6 col-xl-3">
+        <div class="card kpi kpi-2 h-100"><div class="card-body">
+            <i class="fas fa-warehouse"></i><small>Au dépôt</small>
+            <div class="kpi-value">{{ dollars(cout_global_depot) }}</div>
+            <div class="small mt-1">{{ ns.unites_dep }} unités{% if ns.en_route %} · {{ ns.en_route }} en route{% endif %}</div>
+        </div></div>
+    </div>
+    <div class="col-12 col-md-6 col-xl-3">
+        <div class="card kpi kpi-4 h-100"><div class="card-body">
+            <i class="fas fa-tags"></i><small>Valeur de vente potentielle</small>
+            <div class="kpi-value">{{ dollars(ns.vente) }}</div>
+            <div class="small mt-1">Marge potentielle : <span class="fw-semibold {{ 'text-success' if marge >= 0 else 'text-danger' }}">{{ dollars(marge) }}</span></div>
+        </div></div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <!-- Classement par valeur -->
+    <div class="col-12 col-xl-7">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-bar me-2"></i>Produits qui immobilisent le plus de valeur</h5>
+            </div>
+            <div class="card-body">
+                {% if top %}
+                <div class="classement" id="classement">
+                    {% for item in top %}
+                    {% set part = (item.cout_total / cout_total_global * 100) if cout_total_global else 0 %}
+                    <div class="barre-ligne" tabindex="0"
+                         data-nom="{{ item.produit.nom }}" data-valeur="{{ dollars(item.cout_total) }}"
+                         data-part="{{ '%.1f'|format(part) }}" data-unites="{{ (item.produit.quantite or 0) + (item.produit.quantite_depot or 0) }}">
+                        <span class="barre-nom text-truncate">{{ item.produit.nom }}</span>
+                        <span class="barre-piste"><span class="barre" style="width: {{ [item.cout_total / max_barre * 100, 0.8]|max }}%"></span></span>
+                        <span class="barre-valeur">{{ dollars(item.cout_total) }}</span>
                     </div>
+                    {% endfor %}
+                    {% if reste > 0.005 %}
+                    <div class="barre-ligne autres" tabindex="0"
+                         data-nom="Autres produits ({{ produits_avec_cout|length - top|length }})" data-valeur="{{ dollars(reste) }}"
+                         data-part="{{ '%.1f'|format(reste / cout_total_global * 100 if cout_total_global else 0) }}" data-unites="">
+                        <span class="barre-nom text-truncate text-muted">Autres ({{ produits_avec_cout|length - top|length }})</span>
+                        <span class="barre-piste"><span class="barre" style="width: {{ [reste / max_barre * 100, 0.8]|max }}%"></span></span>
+                        <span class="barre-valeur text-muted">{{ dollars(reste) }}</span>
+                    </div>
+                    {% endif %}
                 </div>
-                <!-- Boutons d'action -->
-                <div class="col-md-6 d-flex justify-content-end">
-                    <button id="resetFilters" class="btn btn-secondary me-2">
-                        <i class="fas fa-sync-alt me-2"></i> Réinitialiser
-                    </button>
-                    <button id="exportCSV" class="btn btn-success me-2">
-                        <i class="fas fa-file-csv me-2"></i> Exporter en CSV
-                    </button>
-                    <button id="printButton" class="btn btn-primary">
-                        <i class="fas fa-print me-2"></i> Imprimer
-                    </button>
-                </div>
+                <p class="small text-muted mb-0 mt-3">
+                    Les 10 premiers produits représentent
+                    <strong>{{ ((top|sum(attribute='cout_total')) / cout_total_global * 100 if cout_total_global else 0)|round|int }} %</strong>
+                    de la valeur totale du stock.
+                </p>
+                {% else %}
+                <div class="empty-state"><i class="fas fa-box-open d-block"></i>Aucun produit en stock.</div>
+                {% endif %}
             </div>
         </div>
     </div>
 
-    <!-- Tableau des produits avec leur stock et coût total -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #27AE60;">
-            <h5 class="card-title mb-0">
-                <i class="fas fa-list me-2"></i> Stock et Coût Total
-                <button id="sortByQuantity" class="btn btn-sm btn-light float-end me-2">
-                    <i class="fas fa-sort-amount-down"></i> Trier par Quantité
+    <!-- Points d'attention -->
+    <div class="col-12 col-xl-5">
+        <div class="card h-100">
+            <div class="card-header"><h5><i class="fas fa-bell me-2"></i>Points d'attention</h5></div>
+            <div class="list-group list-group-flush">
+                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" data-filtre-rapide="transfert">
+                    <span class="ql-icon d-inline-flex align-items-center justify-content-center rounded-3" style="width:38px;height:38px;background:var(--mkm-info-soft);color:var(--mkm-info)"><i class="fas fa-right-left"></i></span>
+                    <span class="flex-grow-1">
+                        <span class="fw-semibold d-block">À transférer en boutique</span>
+                        <span class="small text-muted">Épuisés en magasin mais disponibles au dépôt</span>
+                    </span>
+                    <span class="badge {{ 'bg-info' if ns.a_transferer else 'bg-secondary' }} fs-6">{{ ns.a_transferer }}</span>
                 </button>
-                <button id="sortByCost" class="btn btn-sm btn-light float-end">
-                    <i class="fas fa-sort-amount-down"></i> Trier par Coût
+                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" data-filtre-rapide="bas">
+                    <span class="ql-icon d-inline-flex align-items-center justify-content-center rounded-3" style="width:38px;height:38px;background:var(--mkm-warning-soft);color:var(--mkm-warning)"><i class="fas fa-triangle-exclamation"></i></span>
+                    <span class="flex-grow-1">
+                        <span class="fw-semibold d-block">Stock boutique bas</span>
+                        <span class="small text-muted">{{ seuil }} unités ou moins en magasin</span>
+                    </span>
+                    <span class="badge {{ 'bg-warning' if ns.bas else 'bg-secondary' }} fs-6">{{ ns.bas }}</span>
                 </button>
-            </h5>
-        </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-striped table-hover" id="stockTable">
-                    <thead class="table-light">
-                        <tr>
-                            <th><i class="fas fa-box me-2"></i>Produit</th>
-                            <th class="text-center"><i class="fas fa-hashtag me-2"></i>Quantité en Magasin</th>
-                            <th class="text-center"><i class="fas fa-hashtag me-2"></i>Quantité en Dépôt</th>
-                            <th class="text-center"><i class="fas fa-money-bill-wave me-2"></i>Coût d'Achat Unitaire</th>
-                            <th class="text-center"><i class="fas fa-money-bill-wave me-2"></i>Coût Total</th>
-                        </tr>
-                    </thead>
-                    <tbody id="stockTableBody">
-                        {% for produit in produits_avec_cout %}
-                        <tr>
-                            <td class="fw-semibold">{{ produit.produit.nom }}</td>
-                            <td class="text-center">{{ produit.produit.quantite }}</td>
-                            <td class="text-center">{{ produit.produit.quantite_depot }}</td>
-                            <td class="text-center">{{ "%.2f"|format(produit.produit.prix_achat or 0) }} $</td>
-                            <td class="text-center">{{ "%.2f"|format(produit.cout_total or 0) }} $</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                <button type="button" class="list-group-item list-group-item-action d-flex align-items-center gap-3 py-3" data-filtre-rapide="rupture">
+                    <span class="ql-icon d-inline-flex align-items-center justify-content-center rounded-3" style="width:38px;height:38px;background:var(--mkm-danger-soft);color:var(--mkm-danger)"><i class="fas fa-ban"></i></span>
+                    <span class="flex-grow-1">
+                        <span class="fw-semibold d-block">En rupture totale</span>
+                        <span class="small text-muted">Plus aucune unité, ni en magasin ni au dépôt</span>
+                    </span>
+                    <span class="badge {{ 'bg-danger' if ns.ruptures else 'bg-secondary' }} fs-6">{{ ns.ruptures }}</span>
+                </button>
             </div>
-        </div>
-    </div>
-
-    <!-- Graphique sur une ligne entière -->
-    <div class="card mt-4 shadow-sm border-0">
-        <div class="card-header text-white" style="background-color: #E67E22;">
-            <h5 class="card-title mb-0">
-                <i class="fas fa-chart-pie me-2"></i> Répartition des Coûts par Produit
-                <button id="toggleChartType" class="btn btn-sm btn-light float-end">
-                    <i class="fas fa-exchange-alt"></i> Basculer en Barres
-                </button>
-            </h5>
-        </div>
-        <div class="card-body">
-            <canvas id="coutChart"></canvas>
+            <div class="card-footer small text-muted">Cliquez sur une ligne pour filtrer le tableau.</div>
         </div>
     </div>
 </div>
 
-<!-- Script pour la gestion des filtres, export CSV, impression, tri et graphique -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchProduit = document.getElementById('searchProduit');
-        const resetFilters = document.getElementById('resetFilters');
-        const exportCSV = document.getElementById('exportCSV');
-        const printButton = document.getElementById('printButton');
-        const stockTableBody = document.getElementById('stockTableBody');
-        const rows = Array.from(stockTableBody.getElementsByTagName('tr'));
+<!-- Tableau détaillé -->
+<div class="card" id="carteTableau">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5><i class="fas fa-list me-2"></i>Détail par produit <span class="badge bg-secondary ms-1" id="compteur">{{ produits_avec_cout|length }}</span></h5>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            <div class="input-group input-group-sm" style="width: 220px;">
+                <span class="input-group-text"><i class="fas fa-search"></i></span>
+                <input type="text" id="recherche" class="form-control" placeholder="Rechercher un produit…">
+            </div>
+            <select id="filtre" class="form-select form-select-sm" style="width: auto;" aria-label="Filtrer">
+                <option value="">Tous les produits</option>
+                <option value="transfert">À transférer en boutique</option>
+                <option value="bas">Stock boutique bas</option>
+                <option value="rupture">En rupture totale</option>
+                <option value="depot">Présents au dépôt</option>
+            </select>
+            <select id="tri" class="form-select form-select-sm" style="width: auto;" aria-label="Trier">
+                <option value="valeur">Valeur décroissante</option>
+                <option value="nom">Nom (A → Z)</option>
+                <option value="total">Quantité totale</option>
+                <option value="magasin">Quantité magasin</option>
+                <option value="depot">Quantité dépôt</option>
+            </select>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover" id="stockTable">
+            <thead>
+                <tr>
+                    <th>Produit</th>
+                    <th class="text-end">Magasin</th>
+                    <th class="text-end">Dépôt</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Coût unitaire</th>
+                    <th class="text-end">Valeur</th>
+                    <th class="text-end">Part</th>
+                </tr>
+            </thead>
+            <tbody id="corps">
+                {% for item in tries %}
+                {% set p = item.produit %}
+                {% set mag = p.quantite or 0 %}{% set dep = p.quantite_depot or 0 %}
+                {% set etat = 'rupture' if mag + dep <= 0 else ('transfert' if mag <= 0 else ('bas' if mag <= seuil else 'ok')) %}
+                <tr data-nom="{{ p.nom|lower }}" data-etat="{{ etat }}" data-mag="{{ mag }}" data-dep="{{ dep }}"
+                    data-valeur="{{ item.cout_total }}" data-cout="{{ p.prix_achat or 0 }}">
+                    <td>
+                        <div class="fw-semibold">{{ p.nom }}</div>
+                        {% if etat == 'rupture' %}<span class="badge bg-danger">Rupture</span>
+                        {% elif etat == 'transfert' %}<span class="badge bg-info">À transférer</span>
+                        {% elif etat == 'bas' %}<span class="badge bg-warning">Stock bas</span>{% endif %}
+                        {% if p.en_route %}<span class="badge bg-secondary"><i class="fas fa-truck-fast me-1"></i>{{ p.en_route }} en route</span>{% endif %}
+                    </td>
+                    <td class="text-end {{ 'text-danger fw-semibold' if mag <= 0 else '' }}">{{ mag }}</td>
+                    <td class="text-end text-muted">{{ dep }}</td>
+                    <td class="text-end fw-semibold">{{ mag + dep }}</td>
+                    <td class="text-end">{{ "%.2f"|format(p.prix_achat or 0) }} $</td>
+                    <td class="text-end fw-semibold">{{ "%.2f"|format(item.cout_total or 0) }} $</td>
+                    <td class="text-end text-muted">{{ '%.1f'|format((item.cout_total / cout_total_global * 100) if cout_total_global else 0) }} %</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td>Total <span class="text-muted fw-normal" id="libelleTotal">(tous les produits)</span></td>
+                    <td class="text-end" id="totMag">{{ ns.unites_mag }}</td>
+                    <td class="text-end" id="totDep">{{ ns.unites_dep }}</td>
+                    <td class="text-end" id="totUnites">{{ ns.unites_mag + ns.unites_dep }}</td>
+                    <td></td>
+                    <td class="text-end" id="totValeur">{{ "%.2f"|format(cout_total_global) }} $</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    <div id="aucun" class="empty-state" style="display: none;"><i class="fas fa-magnifying-glass d-block"></i>Aucun produit ne correspond à ces critères.</div>
+</div>
 
-        // Fonction pour filtrer les produits
-        function filterProduits() {
-            const searchTerm = searchProduit.value.toLowerCase();
-            let visibleRows = 0;
-
-            for (let row of rows) {
-                const cells = row.getElementsByTagName('td');
-                let matchSearch = false;
-
-                // Filtre par recherche
-                for (let cell of cells) {
-                    if (cell.textContent.toLowerCase().includes(searchTerm)) {
-                        matchSearch = true;
-                        break;
-                    }
-                }
-
-                // Afficher ou masquer la ligne en fonction des filtres
-                if (matchSearch) {
-                    row.style.display = '';
-                    visibleRows++;
-                } else {
-                    row.style.display = 'none';
-                }
-            }
-        }
-
-        // Appliquer les filtres lors de la modification du champ de recherche
-        searchProduit.addEventListener('input', filterProduits);
-
-        // Réinitialiser les filtres
-        resetFilters.addEventListener('click', function() {
-            searchProduit.value = '';
-            filterProduits();
-        });
-
-        // Exporter en CSV
-        exportCSV.addEventListener('click', function() {
-            const rows = Array.from(stockTableBody.querySelectorAll('tr'));
-            const headers = ["Produit", "Quantité en Magasin", "Quantité en Dépôt", "Coût d'Achat Unitaire", "Coût Total"];
-            const csvContent = [
-                headers.join(","), // En-têtes
-                ...rows.map(row => {
-                    const cells = Array.from(row.querySelectorAll('td'));
-                    return cells.map(cell => cell.textContent).join(",");
-                })
-            ].join("\n");
-
-            // Créer un fichier CSV et le télécharger
-            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "stock_global.csv";
-            link.click();
-        });
-
-        // Imprimer le tableau avec les totaux
-        printButton.addEventListener('click', function() {
-            // Calculer les totaux des lignes visibles
-            let totalMagasin = 0;
-            let totalDepot = 0;
-            let totalCout = 0;
-            
-            const visibleRows = Array.from(rows).filter(row => row.style.display !== 'none');
-            
-            visibleRows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                totalMagasin += parseFloat(cells[1].textContent) || 0;
-                totalDepot += parseFloat(cells[2].textContent) || 0;
-                totalCout += parseFloat(cells[4].textContent.replace(' $', '')) || 0;
-            });
-
-            const printContents = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <title>Rapport Stock Global</title>
-                    <style>
-                        body { font-family: Arial, sans-serif; margin: 20px; }
-                        .header { text-align: center; margin-bottom: 20px; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-                        th { background-color: #f2f2f2; }
-                        .total-section { margin-top: 30px; }
-                        .total-row { font-weight: bold; background-color: #f9f9f9; }
-                        .grand-total { font-size: 1.2rem; font-weight: bold; text-align: center; margin-top: 20px; padding: 10px; background-color: #e9ecef; border-radius: 5px; }
-                        .sub-total { font-weight: bold; background-color: #f8f9fa; }
-                        @media print {
-                            .no-print { display: none; }
-                            body { margin: 0; }
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1>Rapport Stock Global</h1>
-                        <p>Généré le: ${new Date().toLocaleDateString()}</p>
-                    </div>
-                    
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Produit</th>
-                                <th>Quantité en Magasin</th>
-                                <th>Quantité en Dépôt</th>
-                                <th>Coût d'Achat Unitaire</th>
-                                <th>Coût Total</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${visibleRows.map(row => `
-                                <tr>
-                                    <td>${row.cells[0].textContent}</td>
-                                    <td>${row.cells[1].textContent}</td>
-                                    <td>${row.cells[2].textContent}</td>
-                                    <td>${row.cells[3].textContent}</td>
-                                    <td>${row.cells[4].textContent}</td>
-                                </tr>
-                            `).join('')}
-                            
-                            <!-- Ligne de totaux pour les produits visibles -->
-                            <tr class="sub-total">
-                                <td>Total des produits filtrés</td>
-                                <td>${totalMagasin}</td>
-                                <td>${totalDepot}</td>
-                                <td>-</td>
-                                <td>${totalCout.toFixed(2)} $</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                    
-                    <div class="total-section">
-                        <div class="grand-total">
-                            Coût Global en Magasin: {{ cout_global_magasin|round(2) }} $
-                        </div>
-                        <div class="grand-total">
-                            Coût Global en Dépôt: {{ cout_global_depot|round(2) }} $
-                        </div>
-                        <div class="grand-total" style="background-color: #d4edda; color: #155724;">
-                            Coût Global Total: {{ cout_total_global|round(2) }} $
-                        </div>
-                    </div>
-                    
-                    <div class="no-print" style="margin-top: 30px; text-align: center;">
-                        <button onclick="window.print()" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            Imprimer le rapport
-                        </button>
-                        <button onclick="window.close()" style="padding: 10px 20px; background-color: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer; margin-left: 10px;">
-                            Fermer
-                        </button>
-                    </div>
-                </body>
-                </html>
-            `;
-
-            const printWindow = window.open('', '_blank', 'height=600,width=800');
-            printWindow.document.write(printContents);
-            printWindow.document.close();
-            
-            // Ajuster pour l'impression après le chargement
-            printWindow.onload = function() {
-                printWindow.focus();
-            };
-        });
-
-        // Trier les colonnes
-        function sortTable(columnIndex, isNumeric = true, ascending = false) {
-            rows.sort((a, b) => {
-                let aValue = a.cells[columnIndex].textContent;
-                let bValue = b.cells[columnIndex].textContent;
-                
-                // Nettoyer les valeurs numériques (supprimer le symbole $)
-                if (isNumeric) {
-                    aValue = parseFloat(aValue.replace(' $', ''));
-                    bValue = parseFloat(bValue.replace(' $', ''));
-                    return ascending ? aValue - bValue : bValue - aValue;
-                } else {
-                    return ascending ? aValue.localeCompare(bValue) : bValue.localeCompare(aValue);
-                }
-            });
-
-            // Réorganiser les lignes dans le tableau
-            rows.forEach(row => stockTableBody.appendChild(row));
-        }
-
-        // États de tri pour suivre l'ordre
-        let sortStates = {
-            quantity: {ascending: false},
-            cost: {ascending: false}
-        };
-
-        // Trier par quantité (colonne 1 : quantité en magasin)
-        document.getElementById('sortByQuantity').addEventListener('click', function() {
-            sortStates.quantity.ascending = !sortStates.quantity.ascending;
-            sortTable(1, true, sortStates.quantity.ascending);
-            
-            // Mettre à jour l'icône
-            const icon = this.querySelector('i');
-            icon.className = sortStates.quantity.ascending ? 
-                'fas fa-sort-amount-up' : 'fas fa-sort-amount-down';
-        });
-
-        // Trier par coût total (colonne 4 : coût total)
-        document.getElementById('sortByCost').addEventListener('click', function() {
-            sortStates.cost.ascending = !sortStates.cost.ascending;
-            sortTable(4, true, sortStates.cost.ascending);
-            
-            // Mettre à jour l'icône
-            const icon = this.querySelector('i');
-            icon.className = sortStates.cost.ascending ? 
-                'fas fa-sort-amount-up' : 'fas fa-sort-amount-down';
-        });
-
-        // Graphique avec Chart.js
-        const ctx = document.getElementById('coutChart').getContext('2d');
-        const produits = {{ produits_avec_cout | tojson | safe }};
-        const labels = produits.map(p => p.produit.nom);
-        const data = produits.map(p => p.cout_total);
-
-        let chartType = 'pie'; // Par défaut, un graphique en camembert
-        let coutChart;
-
-        function createChart(type) {
-            if (coutChart) {
-                coutChart.destroy(); // Détruire le graphique existant
-            }
-
-            coutChart = new Chart(ctx, {
-                type: type,
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Coût Total par Produit',
-                        data: data,
-                        backgroundColor: [
-                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40',
-                            '#C9CBCF', '#4BC0C0', '#FF6384', '#C9CBCF', '#36A2EB', '#FFCE56',
-                            '#9966FF', '#FF9F40', '#4BC0C0', '#FF6384', '#36A2EB', '#FFCE56'
-                        ],
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: {
-                                boxWidth: 12,
-                                font: {
-                                    size: 10
-                                }
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.label}: ${context.raw.toFixed(2)} $`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Créer le graphique initial (camembert)
-        createChart(chartType);
-
-        // Basculer entre camembert et barres
-        document.getElementById('toggleChartType').addEventListener('click', function() {
-            if (chartType === 'pie') {
-                chartType = 'bar';
-                this.innerHTML = '<i class="fas fa-exchange-alt"></i> Basculer en Camembert';
-            } else {
-                chartType = 'pie';
-                this.innerHTML = '<i class="fas fa-exchange-alt"></i> Basculer en Barres';
-            }
-            createChart(chartType);
-        });
-    });
-</script>
+<!-- Info-bulle du classement -->
+<div id="infobulle" class="infobulle" role="tooltip" hidden></div>
 
 <style>
-    /* Ajouter des styles pour améliorer l'apparence du tableau */
-    .table {
-        width: 100%;
-        border-collapse: collapse;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    .classement { display: grid; gap: .55rem; }
+    .barre-ligne {
+        display: grid;
+        grid-template-columns: minmax(90px, 32%) 1fr auto;
+        align-items: center;
+        gap: .75rem;
+        padding: .2rem .35rem;
+        margin: 0 -.35rem;
+        border-radius: 6px;
+        outline: none;
+        cursor: default;
     }
-
-    .table th, .table td {
-        padding: 12px;
-        text-align: center;
-        border: 1px solid #ddd;
+    .barre-ligne:hover, .barre-ligne:focus-visible { background: var(--mkm-surface-2); }
+    .barre-nom { font-size: .85rem; font-weight: 500; }
+    .barre-piste { position: relative; height: 12px; }
+    .barre {
+        position: absolute; inset: 0 auto 0 0;
+        background: var(--mkm-primary);
+        border-radius: 0 4px 4px 0;   /* extrémité arrondie, ancrée à gauche */
     }
-
-    .table th {
-        background-color: #f8f9fa;
-        font-weight: bold;
+    .barre-ligne.autres .barre { background: #64748b; }  /* neutre : reste du stock, étiqueté en clair */
+    .barre-ligne:hover .barre, .barre-ligne:focus-visible .barre { filter: brightness(1.1); }
+    .barre-valeur { font-size: .82rem; font-weight: 600; color: var(--mkm-text); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+    #stockTable td, #stockTable th { font-variant-numeric: tabular-nums; }
+    #stockTable td .badge { font-size: .68rem; margin-top: .2rem; }
+    .infobulle {
+        position: fixed; z-index: 1080; pointer-events: none;
+        background: #0f172a; color: #fff; border-radius: 8px;
+        padding: .5rem .7rem; font-size: .8rem; line-height: 1.35;
+        box-shadow: var(--mkm-shadow-lg); max-width: 260px;
     }
-
-    .table-striped tbody tr:nth-of-type(odd) {
-        background-color: #f9f9f9;
-    }
-
-    .table-hover tbody tr:hover {
-        background-color: #f1f1f1;
-    }
-
-    /* Style pour les boutons */
-    .btn-success {
-        background-color: #28a745;
-        border-color: #28a745;
-    }
-
-    .btn-success:hover {
-        background-color: #218838;
-        border-color: #1e7e34;
-    }
-
-    .btn-primary {
-        background-color: #007bff;
-        border-color: #007bff;
-    }
-
-    .btn-primary:hover {
-        background-color: #0056b3;
-        border-color: #004085;
-    }
-    
-    /* Amélioration visuelle des cartes de total */
-    .card {
-        transition: transform 0.2s;
-    }
-    
-    .card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    .infobulle strong { display: block; margin-bottom: .15rem; }
+    .infobulle .ligne { color: #cbd5e1; }
+    @media (max-width: 575.98px) {
+        .barre-ligne { grid-template-columns: 1fr auto; }
+        .barre-piste { grid-column: 1 / -1; order: 3; }
     }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const corps = document.getElementById('corps');
+    const lignes = Array.from(corps.querySelectorAll('tr'));
+    const recherche = document.getElementById('recherche');
+    const filtre = document.getElementById('filtre');
+    const tri = document.getElementById('tri');
+    // Même format que le serveur : 1 234.50
+    const fmt = n => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+    function visibles() { return lignes.filter(r => r.style.display !== 'none'); }
+
+    function maj() {
+        const q = recherche.value.toLowerCase().trim();
+        const f = filtre.value;
+        let mag = 0, dep = 0, val = 0, n = 0;
+        lignes.forEach(r => {
+            const ok = r.dataset.nom.includes(q)
+                && (!f || (f === 'depot' ? Number(r.dataset.dep) > 0 : r.dataset.etat === f));
+            r.style.display = ok ? '' : 'none';
+            if (ok) { n++; mag += Number(r.dataset.mag); dep += Number(r.dataset.dep); val += Number(r.dataset.valeur); }
+        });
+        const ordre = {
+            valeur: (a, b) => b.dataset.valeur - a.dataset.valeur,
+            nom: (a, b) => a.dataset.nom.localeCompare(b.dataset.nom),
+            total: (a, b) => (Number(b.dataset.mag) + Number(b.dataset.dep)) - (Number(a.dataset.mag) + Number(a.dataset.dep)),
+            magasin: (a, b) => b.dataset.mag - a.dataset.mag,
+            depot: (a, b) => b.dataset.dep - a.dataset.dep,
+        }[tri.value];
+        lignes.slice().sort(ordre).forEach(r => corps.appendChild(r));
+        document.getElementById('compteur').textContent = n;
+        document.getElementById('totMag').textContent = mag;
+        document.getElementById('totDep').textContent = dep;
+        document.getElementById('totUnites').textContent = mag + dep;
+        document.getElementById('totValeur').textContent = fmt(val) + ' $';
+        document.getElementById('libelleTotal').textContent = (q || f) ? `(${n} produit${n > 1 ? 's' : ''} affiché${n > 1 ? 's' : ''})` : '(tous les produits)';
+        document.getElementById('aucun').style.display = n ? 'none' : 'block';
+    }
+    recherche.addEventListener('input', maj);
+    filtre.addEventListener('change', maj);
+    tri.addEventListener('change', maj);
+
+    // Raccourcis depuis « Points d'attention »
+    document.querySelectorAll('[data-filtre-rapide]').forEach(b => b.addEventListener('click', () => {
+        filtre.value = b.dataset.filtreRapide;
+        recherche.value = '';
+        maj();
+        document.getElementById('carteTableau').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }));
+
+    // Info-bulle du classement (souris et clavier)
+    const bulle = document.getElementById('infobulle');
+    function montrer(el, x, y) {
+        bulle.innerHTML = '';
+        const titre = document.createElement('strong'); titre.textContent = el.dataset.nom; bulle.appendChild(titre);
+        const l1 = document.createElement('div'); l1.className = 'ligne'; l1.textContent = `Valeur : ${el.dataset.valeur}`; bulle.appendChild(l1);
+        const l2 = document.createElement('div'); l2.className = 'ligne'; l2.textContent = `Part du stock : ${el.dataset.part.replace('.', ',')} %`; bulle.appendChild(l2);
+        if (el.dataset.unites) { const l3 = document.createElement('div'); l3.className = 'ligne'; l3.textContent = `Unités : ${el.dataset.unites}`; bulle.appendChild(l3); }
+        bulle.hidden = false;
+        const w = bulle.offsetWidth, h = bulle.offsetHeight;
+        bulle.style.left = Math.min(x + 14, window.innerWidth - w - 8) + 'px';
+        bulle.style.top = Math.max(8, y - h - 10) + 'px';
+    }
+    document.querySelectorAll('.barre-ligne').forEach(el => {
+        el.addEventListener('mousemove', e => montrer(el, e.clientX, e.clientY));
+        el.addEventListener('mouseleave', () => bulle.hidden = true);
+        el.addEventListener('focus', () => { const r = el.getBoundingClientRect(); montrer(el, r.left + r.width / 2, r.top); });
+        el.addEventListener('blur', () => bulle.hidden = true);
+    });
+
+    // Export CSV des lignes affichées
+    const cellules = r => Array.from(r.cells).map(c => c.querySelector('.fw-semibold') && c.cellIndex === 0
+        ? c.querySelector('.fw-semibold').textContent.trim() : c.textContent.trim().replace(/\s+/g, ' '));
+    document.getElementById('exportCSV').addEventListener('click', () => {
+        const entetes = ['Produit', 'Magasin', 'Dépôt', 'Total', 'Coût unitaire ($)', 'Valeur ($)', 'Part (%)'];
+        const donnees = visibles().map(r => cellules(r).map(v => v.replace(/ ?[$%]$/, '')));
+        const csv = [entetes, ...donnees].map(l => l.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';')).join('\r\n');
+        const lien = document.createElement('a');
+        lien.href = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+        lien.download = `stock_global_${new Date().toISOString().slice(0, 10)}.csv`;
+        lien.click();
+        URL.revokeObjectURL(lien.href);
+    });
+
+    // Impression des lignes affichées
+    const echapper = s => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    document.getElementById('printButton').addEventListener('click', () => {
+        const corpsImpr = visibles().map(r => `<tr>${cellules(r).map(v => `<td>${echapper(v)}</td>`).join('')}</tr>`).join('');
+        const pied = Array.from(document.querySelector('#stockTable tfoot tr').cells).map(c => `<td><strong>${echapper(c.textContent.trim())}</strong></td>`).join('');
+        const w = window.open('', '', 'height=700,width=950');
+        w.document.write(`<html><head><title>Stock global</title><style>
+            body{font-family:Arial,sans-serif;margin:24px;color:#0f172a} h1{font-size:20px;margin:0} h2{font-size:15px;color:#475569;font-weight:normal;margin:4px 0 16px}
+            p{font-size:12px;color:#64748b;margin:2px 0} table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12px}
+            th,td{border:1px solid #e2e8f0;padding:6px 8px;text-align:right} th:first-child,td:first-child{text-align:left} th{background:#f1f5f9}
+            </style></head><body><h1>MKM Shop</h1><h2>Stock global</h2>
+            <p>Imprimé le ${new Date().toLocaleString('fr-FR')}</p>
+            <table><thead><tr><th>Produit</th><th>Magasin</th><th>Dépôt</th><th>Total</th><th>Coût unitaire</th><th>Valeur</th><th>Part</th></tr></thead>
+            <tbody>${corpsImpr}</tbody><tfoot><tr>${pied}</tr></tfoot></table></body></html>`);
+        w.document.close();
+        w.print();
+    });
+});
+</script>
 {% endblock %}
