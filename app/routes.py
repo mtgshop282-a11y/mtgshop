@@ -379,6 +379,29 @@ def ajouter_transaction():
 # ==================== ROUTES DE VENTES ====================
 # ==================== NOUVELLES ROUTES API POUR VENTES AJAX ====================
 
+def _panier_json(session_id):
+    """Contenu du panier d'une session : (lignes, total)."""
+    lignes, total = [], 0
+    if not session_id:
+        return lignes, total
+    for item in Panier.query.filter_by(session_id=session_id).order_by(Panier.id.asc()).all():
+        prod = item.produit
+        item_total = round(item.quantite * item.prix, 2)
+        lignes.append({
+            'id': item.id,
+            'produit_id': item.produit_id,
+            'produit_nom': prod.nom if prod else 'Produit supprimé',
+            'quantite': item.quantite,
+            'prix': item.prix,
+            'prix_catalogue': prod.prix if prod else item.prix,
+            'stock_magasin': (prod.quantite or 0) if prod else 0,
+            'stock_depot': (prod.quantite_depot or 0) if prod else 0,
+            'total': item_total
+        })
+        total += item_total
+    return lignes, round(total, 2)
+
+
 @bp.route('/api/panier/ajouter', methods=['POST'])
 @login_required
 @permission_required('gestion_ventes')
@@ -403,80 +426,82 @@ def api_ajouter_au_panier():
                 'message': 'Produit introuvable.'
             }), 404
 
-        # Vente à perte : seulement après confirmation explicite du vendeur
-        if prix < (produit_ajoute.prix_achat or 0) - EPSILON_MONTANT and not data.get('accepter_perte'):
-            return jsonify({
-                'success': False,
-                'code': 'prix_sous_cout',
-                'message': (f"Le prix saisi ({prix:.2f} $) est trop bas pour {produit_ajoute.nom} : "
-                            f"cette vente se fera à perte.")
-            }), 409
+        # La vente sous le prix d'achat est permise (soldes, déstockage) : le prix d'achat
+        # reste figé sur la ligne de vente, la perte apparaît donc dans les bénéfices.
 
         session_id = request.cookies.get('session_id')
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # Vérifier si le produit existe déjà dans le panier
+        # Produit déjà dans le panier : on ajoute la quantité (au nouveau prix saisi)
         item_existant = Panier.query.filter_by(
-            produit_id=produit_id, 
+            produit_id=produit_id,
             session_id=session_id
         ).first()
-        
+
         if item_existant:
-            return jsonify({
-                'success': False,
-                'message': 'Ce produit est déjà dans le panier.'
-            }), 400
-        
-        # Ajouter au panier
-        nouveau_panier = Panier(
-            produit_id=produit_id,
-            quantite=quantite,
-            prix=prix,
-            session_id=session_id
-        )
-        db.session.add(nouveau_panier)
+            item_existant.quantite += quantite
+            item_existant.prix = prix
+            message = f'Quantité de {produit_ajoute.nom} portée à {item_existant.quantite}'
+        else:
+            db.session.add(Panier(
+                produit_id=produit_id,
+                quantite=quantite,
+                prix=prix,
+                session_id=session_id
+            ))
+            message = 'Produit ajouté au panier'
         db.session.commit()
-        
-        # Récupérer les infos du produit
-        produit = Produits.query.get(produit_id)
-        
-        # Retourner le panier complet mis à jour
-        panier_items = Panier.query.filter_by(session_id=session_id).all()
-        
-        panier_data = []
-        total = 0
-        
-        for item in panier_items:
-            prod = Produits.query.get(item.produit_id)
-            item_total = item.quantite * item.prix
-            
-            panier_data.append({
-                'id': item.id,
-                'produit_id': item.produit_id,
-                'produit_nom': prod.nom if prod else 'Produit supprimé',
-                'quantite': item.quantite,
-                'prix': item.prix,
-                'prix_catalogue': item.produit.prix if item.produit else item.prix,
-                'total': item_total
-            })
-            
-            total += item_total
-        
+
+        panier_data, total = _panier_json(session_id)
         return jsonify({
             'success': True,
-            'message': 'Produit ajouté au panier',
+            'message': message,
             'panier': panier_data,
             'total': total,
             'session_id': session_id
         })
-        
+
     except Exception as e:
         db.session.rollback()
         return jsonify({
             'success': False,
             'message': f'Erreur: {str(e)}'
         }), 500
+
+
+@bp.route('/api/panier/modifier/<int:id>', methods=['PUT'])
+@login_required
+@permission_required('gestion_ventes')
+def api_modifier_panier(id):
+    """Modifie la quantité et/ou le prix unitaire d'un article du panier."""
+    try:
+        item = Panier.query.get_or_404(id)
+        if item.session_id != request.cookies.get('session_id'):
+            return jsonify({'success': False, 'message': "Cet article n'appartient pas à votre panier."}), 403
+
+        data = request.get_json() or {}
+        quantite = int(data.get('quantite', item.quantite))
+        prix = float(data.get('prix', item.prix))
+        if quantite <= 0 or prix <= 0:
+            return jsonify({'success': False, 'message': 'La quantité et le prix doivent être positifs.'}), 400
+
+        item.quantite = quantite
+        item.prix = prix
+        db.session.commit()
+
+        panier_data, total = _panier_json(item.session_id)
+        avertissement = None
+        if item.produit and quantite > (item.produit.quantite or 0):
+            avertissement = (f"Stock magasin de {item.produit.nom} : {item.produit.quantite or 0}. "
+                             f"Une vente sur place sera refusée, sauf livraison au dépôt.")
+        return jsonify({'success': True, 'message': 'Panier mis à jour', 'avertissement': avertissement,
+                        'panier': panier_data, 'total': total})
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': 'Quantité ou prix invalide.'}), 400
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': f'Erreur: {str(e)}'}), 500
 
 
 @bp.route('/api/panier/supprimer/<int:id>', methods=['DELETE'])
@@ -539,38 +564,14 @@ def api_vider_panier():
 def api_get_panier():
     """API AJAX pour récupérer le contenu du panier"""
     try:
-        session_id = request.cookies.get('session_id')
-        if not session_id:
-            return jsonify({'success': True, 'panier': [], 'total': 0})
-        
-        panier_items = Panier.query.filter_by(session_id=session_id).all()
-        
-        panier_data = []
-        total = 0
-        
-        for item in panier_items:
-            produit = Produits.query.get(item.produit_id)
-            item_total = item.quantite * item.prix
-            
-            panier_data.append({
-                'id': item.id,
-                'produit_id': item.produit_id,
-                'produit_nom': produit.nom if produit else 'Produit supprimé',
-                'quantite': item.quantite,
-                'prix': item.prix,
-                'prix_catalogue': item.produit.prix if item.produit else item.prix,
-                'total': item_total
-            })
-            
-            total += item_total
-        
+        panier_data, total = _panier_json(request.cookies.get('session_id'))
         return jsonify({
             'success': True,
             'panier': panier_data,
             'total': total,
             'count': len(panier_data)
         })
-        
+
     except Exception as e:
         return jsonify({
             'success': False,

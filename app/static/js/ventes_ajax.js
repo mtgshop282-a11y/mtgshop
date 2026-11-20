@@ -15,6 +15,7 @@ class PanierManager {
         this.setupEventListeners();
         this.setupModal();
         this.setupRealTimeValidation();
+        this.setupEditionPanier();
     }
     
     getSessionId() {
@@ -69,7 +70,7 @@ class PanierManager {
         }
     }
 
-    async ajouterProduit(produitId, quantite, prix, accepterPerte = false) {
+    async ajouterProduit(produitId, quantite, prix) {
         try {
             const btn = document.getElementById('btn-ajouter-panier');
             const originalText = btn.innerHTML;
@@ -88,8 +89,7 @@ class PanierManager {
                 body: JSON.stringify({ 
                     produit_id: produitId, 
                     quantite: quantite, 
-                    prix: prix,
-                    accepter_perte: accepterPerte
+                    prix: prix
                 })
             });
             
@@ -101,15 +101,8 @@ class PanierManager {
                 this.total = data.total || 0;
                 console.log('Panier après ajout:', this.panier);
                 this.mettreAJourInterface();
-                this.afficherNotification('Produit ajouté au panier', 'success');
+                this.afficherNotification(data.message || 'Produit ajouté au panier', 'success');
                 this.resetFormulaireProduit();
-            } else if (data.code === 'prix_sous_cout' && !accepterPerte) {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-                if (confirm(`${data.message}\n\nConfirmer quand même ce prix ?`)) {
-                    return this.ajouterProduit(produitId, quantite, prix, true);
-                }
-                return;
             } else {
                 this.afficherNotification(data.message || 'Erreur lors de l\'ajout', 'error');
             }
@@ -127,6 +120,69 @@ class PanierManager {
         }
     }
     
+    async modifierArticle(itemId, quantite, prix) {
+        const ligne = document.getElementById(`panier-item-${itemId}`);
+        if (ligne) ligne.style.opacity = '0.6';
+        try {
+            const response = await fetch(`/api/panier/modifier/${itemId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: JSON.stringify({ quantite: quantite, prix: prix })
+            });
+            const data = await response.json();
+            if (data.success) {
+                this.panier = data.panier || [];
+                this.total = data.total || 0;
+                if (data.avertissement) this.afficherNotification(data.avertissement, 'warning');
+            } else {
+                this.afficherNotification(data.message || 'Modification impossible', 'error');
+            }
+        } catch (error) {
+            console.error('Erreur lors de la modification du panier:', error);
+            this.afficherNotification('Erreur lors de la modification du panier', 'error');
+        }
+        // Toujours réafficher l'état réel du panier (annule une saisie refusée)
+        this.mettreAJourInterface();
+    }
+
+    setupEditionPanier() {
+        const container = document.getElementById('panier-container');
+        if (!container) return;
+        const lireLigne = el => {
+            const ligne = el.closest('.panier-item');
+            return ligne ? {
+                id: Number(ligne.dataset.id),
+                quantite: parseInt(ligne.querySelector('.champ-quantite').value, 10),
+                prix: parseFloat(ligne.querySelector('.champ-prix').value)
+            } : null;
+        };
+        // Boutons − / +
+        container.addEventListener('click', e => {
+            const bouton = e.target.closest('.btn-qte');
+            if (!bouton) return;
+            const l = lireLigne(bouton);
+            const quantite = Math.max(1, (l.quantite || 1) + Number(bouton.dataset.delta));
+            this.modifierArticle(l.id, quantite, l.prix);
+        });
+        // Saisie directe (validée en quittant le champ ou avec Entrée)
+        container.addEventListener('change', e => {
+            if (!e.target.matches('.champ-quantite, .champ-prix')) return;
+            const l = lireLigne(e.target);
+            if (!(l.quantite >= 1) || !(l.prix > 0)) {
+                this.afficherNotification('La quantité et le prix doivent être positifs.', 'warning');
+                this.mettreAJourInterface();
+                return;
+            }
+            this.modifierArticle(l.id, l.quantite, l.prix);
+        });
+        container.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && e.target.matches('.champ-quantite, .champ-prix')) {
+                e.preventDefault();
+                e.target.blur();
+            }
+        });
+    }
+
     async supprimerProduit(itemId) {
         try {
             console.log('Suppression produit ID:', itemId);
@@ -278,53 +334,66 @@ class PanierManager {
             return;
         }
         
+        const echapper = t => String(t ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
         let html = `
             <div class="table-responsive flex-grow-1">
-                <table class="table table-bordered table-hover align-middle" style="border: 2px solid #dee2e6;">
-                    <thead class="table-dark" style="background-color: #212529 !important;">
+                <table class="table table-hover align-middle mb-0 panier-table" style="min-width: 520px;">
+                    <thead>
                         <tr>
-                            <th style="border: 1px solid #495057; padding: 8px; font-size: 14px; text-align: center;"><strong>Produit</strong></th>
-                            <th style="border: 1px solid #495057; padding: 8px; font-size: 14px; text-align: center;"><strong>Qté</strong></th>
-                            <th style="border: 1px solid #495057; padding: 8px; font-size: 14px; text-align: center;"><strong>Prix U.</strong></th>
-                            <th style="border: 1px solid #495057; padding: 8px; font-size: 14px; text-align: center;"><strong>Total</strong></th>
-                            <th style="border: 1px solid #495057; padding: 8px; font-size: 14px; text-align: center;"><strong>Actions</strong></th>
+                            <th>Produit</th>
+                            <th class="text-center" style="width: 132px;">Quantité</th>
+                            <th class="text-center" style="width: 110px;">Prix U. ($)</th>
+                            <th class="text-end">Total</th>
+                            <th style="width: 44px;"></th>
                         </tr>
                     </thead>
                     <tbody>
         `;
-        
+
         this.panier.forEach(item => {
-            console.log('Item panier:', item);
+            const depasse = item.quantite > (item.stock_magasin ?? Infinity);
             html += `
-                <tr class="panier-item" id="panier-item-${item.id}" style="border-bottom: 1px solid #dee2e6;">
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;">
-                        <div class="d-flex align-items-center justify-content-center">
-                            <div class="flex-shrink-0">
-                                <i class="fas fa-box text-primary me-2"></i>
-                            </div>
-                            <div class="flex-grow-1 ms-2">
-                                <span class="fw-semibold">${item.produit_nom || 'Produit'}</span>
-                            </div>
+                <tr class="panier-item" id="panier-item-${item.id}" data-id="${item.id}">
+                    <td>
+                        <div class="fw-semibold">${echapper(item.produit_nom || 'Produit')}</div>
+                        <div class="small ${depasse ? 'text-danger' : 'text-muted'}">
+                            Magasin : ${item.stock_magasin ?? '?'}${item.stock_depot ? ` · Dépôt : ${item.stock_depot}` : ''}
                         </div>
                     </td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.quantite || 0}</strong></td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center;"><strong>${item.prix ? parseFloat(item.prix).toFixed(2) : '0.00'} $</strong></td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; font-size: 13px; text-align: center; font-weight: 600;"><strong>${item.total ? parseFloat(item.total).toFixed(2) : '0.00'} $</strong></td>
-                    <td style="border: 1px solid #dee2e6; padding: 8px; text-align: center;">
-                        <button type="button" class="btn btn-sm btn-outline-danger btn-action" onclick="panierManager.supprimerProduit(${item.id})" title="Supprimer du panier">
+                    <td>
+                        <div class="input-group input-group-sm flex-nowrap">
+                            <button type="button" class="btn btn-outline-secondary btn-qte" data-delta="-1" aria-label="Diminuer la quantité" ${item.quantite <= 1 ? 'disabled' : ''}>
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <input type="number" class="form-control text-center champ-quantite" style="min-width: 48px;" min="1" step="1"
+                                   value="${item.quantite}" aria-label="Quantité de ${echapper(item.produit_nom)}">
+                            <button type="button" class="btn btn-outline-secondary btn-qte" data-delta="1" aria-label="Augmenter la quantité">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                    </td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm text-center champ-prix" min="0.01" step="0.01"
+                               value="${parseFloat(item.prix || 0).toFixed(2)}" aria-label="Prix unitaire de ${echapper(item.produit_nom)}">
+                    </td>
+                    <td class="text-end fw-semibold text-nowrap">${parseFloat(item.total || 0).toFixed(2)} $</td>
+                    <td class="text-end">
+                        <button type="button" class="btn btn-sm btn-outline-danger btn-action" onclick="panierManager.supprimerProduit(${item.id})" title="Retirer du panier" aria-label="Retirer du panier">
                             <i class="fas fa-trash-alt"></i>
                         </button>
                     </td>
                 </tr>
             `;
         });
-        
+
         html += `
                     </tbody>
                 </table>
             </div>
+            <div class="small text-muted mt-2"><i class="fas fa-pen me-1"></i>Modifiez la quantité ou le prix directement dans le panier.</div>
         `;
-        
+
         console.log('HTML généré pour panier');
         container.innerHTML = html;
     }
